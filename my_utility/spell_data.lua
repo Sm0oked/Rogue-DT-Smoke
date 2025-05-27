@@ -138,7 +138,7 @@ local spell_data = {
         buff_id = 24313
     },
     evade = {
-        spell_id = 197833
+        spell_id = 337031
     }
 }
 

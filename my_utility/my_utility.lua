@@ -119,7 +119,7 @@ local function is_action_allowed()
         return false;
     end
 
-    local busy_spell_id_1 = 197833
+    local busy_spell_id_1 = 337031
     local active_spell_id = local_player:get_active_spell_id()
     if active_spell_id == busy_spell_id_1 then
         return false
