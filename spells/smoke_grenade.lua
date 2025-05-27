@@ -1,4 +1,5 @@
 local my_utility = require("my_utility/my_utility")
+local menu_module = require("menu")
 
 local menu_elements =
 {
@@ -21,7 +22,7 @@ local menu_elements =
     spell_radius   = slider_float:new(0.50, 5.0, 2.50, get_hash(my_utility.plugin_label .. "smoke_grenade_spell_radius")),
 }
 
-local function menu()
+local function render_menu()
     
     if menu_elements.tree_tab:push("Smoke Grenade")then
         menu_elements.main_boolean:render("Enable Spell", "");
@@ -92,14 +93,32 @@ local function logics(entity_list, target_selector_data, best_target)
     -- console.print("keybind_can_skip " .. tostring(keybind_can_skip))
     -- console.print("keybind_used " .. keybind_used)
     
+    -- Check for minimum enemy count (global setting)
+    local spell_radius = menu_elements.spell_radius:get()
+    local all_units_count, normal_units_count, elite_units_count, champion_units_count, boss_units_count = 
+        my_utility.enemy_count_in_range(spell_radius, player_position)
+    
+    -- Get global minimum enemy count setting
+    local global_min_enemies = menu_module.menu_elements.enemy_count_threshold:get()
+    local spell_min_hits = menu_elements.min_hits:get()
+    
+    -- Use the higher of the two thresholds
+    local effective_min_enemies = math.max(global_min_enemies, spell_min_hits)
+    
+    -- Skip if not enough enemies and no special units and not using keybind override
+    if not keybind_can_skip and all_units_count < effective_min_enemies and 
+       elite_units_count == 0 and champion_units_count == 0 and boss_units_count == 0 then
+        return false
+    end
+
     local is_percentage_hits_allowed = menu_elements.allow_percentage_hits:get();
     local min_percentage = menu_elements.min_percentage_hits:get();
     if not is_percentage_hits_allowed then
         min_percentage = 0.0;
     end
 
-    local spell_range =  menu_elements.spell_range:get()
-    local spell_radius =  menu_elements.spell_radius:get()
+    local spell_range = menu_elements.spell_range:get()
+    -- We already got spell_radius above for the enemy count check
     local min_hits_menu = menu_elements.min_hits:get();
 
     local area_data = my_target_selector.get_most_hits_circular(player_position, spell_range, spell_radius)
@@ -205,6 +224,6 @@ end
 
 return 
 {
-    menu = menu,
+    menu = render_menu,
     logics = logics,   
 }

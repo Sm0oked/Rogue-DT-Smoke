@@ -1,4 +1,5 @@
 local my_utility = require("my_utility/my_utility")
+local menu_module = require("menu")
 
 local menu_elements_rain_of_arrows =
 {
@@ -16,7 +17,7 @@ local menu_elements_rain_of_arrows =
     soft_score            = slider_float:new(2.0, 15.0, 6.0, get_hash(my_utility.plugin_label .. "min_percentage_hits_rain_base_soft_core")),
 }
 
-local function menu()
+local function render_menu()
     
     if menu_elements_rain_of_arrows.tree_tab:push("Rain Of Arrows") then
         menu_elements_rain_of_arrows.main_boolean:render("Enable Spell", "");
@@ -55,8 +56,9 @@ local spell_data_rain_of_arrows = spell_data:new(
 
 local my_target_selector = require("my_utility/my_target_selector");
 
-local spell_radius = 7.0
-local spell_max_range = 7.0
+-- Define default values but will use menu values in the actual function
+local default_spell_radius = 7.0
+local default_spell_max_range = 7.0
 
 local next_time_allowed_cast = 0.0;
 
@@ -84,9 +86,37 @@ local function logics(entity_list, target_selector_data, best_target)
     local keybind_ignore_hits = menu_elements_rain_of_arrows.keybind_ignore_hits:get();
 
     ---@type boolean
-        local keybind_can_skip = keybind_ignore_hits == true and keybind_used > 0;
-    -- console.print("keybind_can_skip " .. tostring(keybind_can_skip))
-    -- console.print("keybind_used " .. keybind_used)
+    local keybind_can_skip = keybind_ignore_hits == true and keybind_used > 0;
+    
+    -- Use dynamic values for radius and range if available via menu, otherwise use defaults
+    local actual_spell_radius = default_spell_radius
+    local actual_spell_max_range = default_spell_max_range
+    
+    -- Some spells might define these in their menu
+    if menu_elements_rain_of_arrows.spell_radius and menu_elements_rain_of_arrows.spell_radius.get then
+        actual_spell_radius = menu_elements_rain_of_arrows.spell_radius:get()
+    end
+    
+    if menu_elements_rain_of_arrows.spell_range and menu_elements_rain_of_arrows.spell_range.get then
+        actual_spell_max_range = menu_elements_rain_of_arrows.spell_range:get()
+    end
+    
+    -- Check for minimum enemy count (global setting)
+    local all_units_count, normal_units_count, elite_units_count, champion_units_count, boss_units_count = 
+        my_utility.enemy_count_in_range(actual_spell_radius, player_position)
+    
+    -- Get global minimum enemy count setting
+    local global_min_enemies = menu_module.menu_elements.enemy_count_threshold:get()
+    local spell_min_hits = menu_elements_rain_of_arrows.min_hits:get()
+    
+    -- Use the higher of the two thresholds
+    local effective_min_enemies = math.max(global_min_enemies, spell_min_hits)
+    
+    -- Skip if not enough enemies and no special units and not using keybind override
+    if not keybind_can_skip and all_units_count < effective_min_enemies and 
+       elite_units_count == 0 and champion_units_count == 0 and boss_units_count == 0 then
+        return false
+    end
     
     local is_percentage_hits_allowed = menu_elements_rain_of_arrows.allow_percentage_hits:get();
     local min_percentage = menu_elements_rain_of_arrows.min_percentage_hits:get();
@@ -99,7 +129,7 @@ local function logics(entity_list, target_selector_data, best_target)
 
 	--local spell_range = 5.0
 	--local spell_radius = 10.0
-	local area_data = my_target_selector.get_most_hits_circular(player_position, spell_max_range, spell_radius)
+	local area_data = my_target_selector.get_most_hits_circular(player_position, actual_spell_max_range, actual_spell_radius)
     if not area_data.main_target then
 
         return false;
@@ -148,6 +178,6 @@ end
 
 return 
 {
-    menu = menu,
+    menu = render_menu,
     logics = logics,   
 }

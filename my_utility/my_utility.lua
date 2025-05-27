@@ -22,8 +22,91 @@ local shrine_conduit_buff_name = "Shine_Conduit";
 local shrine_conduit_buff_name_hash = shrine_conduit_buff_name;
 local shrine_conduit_buff_name_hash_c = 421661;
 
-local function is_action_allowed()
+-- Enhanced targeting functions
+local function is_buff_active(spell_id, buff_id, min_stack_count)
+    -- set default set count to 1 if not passed
+    min_stack_count = min_stack_count or 1
 
+    -- get player buffs
+    local local_player = get_local_player()
+    if not local_player then return false end
+    local local_player_buffs = local_player:get_buffs()
+    if not local_player_buffs then return false end
+
+    -- for every buff
+    for _, buff in ipairs(local_player_buffs) do
+        -- if we have a matching spell and buff id and
+        -- we have at least the minimum amount of stack or the buff has more than 0.2 seconds remaining
+        if buff.name_hash == spell_id and buff.type == buff_id and (buff.stacks >= min_stack_count or buff:get_remaining_time() > 0.2) then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function buff_stack_count(spell_id, buff_id)
+    -- get player buffs
+    local local_player = get_local_player()
+    if not local_player then return 0 end
+    local local_player_buffs = local_player:get_buffs()
+    if not local_player_buffs then return 0 end
+
+    -- iterate over each buff
+    for _, buff in ipairs(local_player_buffs) do
+        -- check for matching spell and buff id
+        if buff.name_hash == spell_id and buff.type == buff_id then
+            -- return the stack amount immediately
+            return buff.stacks
+        end
+    end
+
+    -- return 0 if no matching buff is found
+    return 0
+end
+
+local function enemy_count_in_range(radius, position)
+    local all_units_count = 0
+    local normal_units_count = 0
+    local elite_units_count = 0
+    local champion_units_count = 0
+    local boss_units_count = 0
+    local radius_squared = radius * radius
+    
+    local enemies = actors_manager.get_enemy_npcs()
+    for _, enemy in ipairs(enemies) do
+        local enemy_position = enemy:get_position()
+        local distance_sqr = enemy_position:squared_dist_to_ignore_z(position)
+        
+        if distance_sqr <= radius_squared then
+            all_units_count = all_units_count + 1
+            
+            if enemy:is_boss() then
+                boss_units_count = boss_units_count + 1
+            elseif enemy:is_champion() then
+                champion_units_count = champion_units_count + 1
+            elseif enemy:is_elite() then
+                elite_units_count = elite_units_count + 1
+            else
+                normal_units_count = normal_units_count + 1
+            end
+        end
+    end
+    
+    return all_units_count, normal_units_count, elite_units_count, champion_units_count, boss_units_count
+end
+
+local function is_in_range(target, range)
+    if not target then return false end
+    
+    local player_position = get_player_position()
+    local target_position = target:get_position()
+    local distance_sqr = target_position:squared_dist_to_ignore_z(player_position)
+    
+    return distance_sqr <= (range * range)
+end
+
+local function is_action_allowed()
     -- evade abort
     local local_player = get_local_player();
     if not local_player then
@@ -65,14 +148,13 @@ local function is_action_allowed()
           end
     end
   
-      -- do not make any actions while in blood mist
-      if is_blood_mist or is_mounted or is_shrine_conduit then
-          -- console.print("Blocking Actions for Some Buff");
-          return false;
-      end
+    -- do not make any actions while in blood mist
+    if is_blood_mist or is_mounted or is_shrine_conduit then
+        -- console.print("Blocking Actions for Some Buff");
+        return false;
+    end
 
     return true
-
 end
 
 local function is_spell_allowed(spell_enable_check, next_cast_allowed_time, spell_id)
@@ -96,15 +178,19 @@ local function is_spell_allowed(spell_enable_check, next_cast_allowed_time, spel
     -- "Combo & Clear", "Combo Only", "Clear Only"
     -- local current_cast_mode = spell_cast_mode
     
-    -- evade abort
-    local local_player = get_local_player();
+    -- evade abort - make this check safer since evade might not be initialized properly
+    local should_check_evade = true
+    local local_player = get_local_player()
     if local_player then
-        local player_position = local_player:get_position();
-        if evade.is_dangerous_position(player_position) then
-            -- console.print("dan zone")
-            return false;
+        local player_position = local_player:get_position()
+        -- Safely check for evade's existence to avoid nil errors
+        if should_check_evade and _G.evade and type(_G.evade.is_dangerous_position) == "function" then
+            if _G.evade.is_dangerous_position(player_position) then
+                -- console.print("Dangerous position detected by evade")
+                return false
+            end
         end
-    end    
+    end
 
     -- -- automatic
     -- if current_cast_mode == 4 then
@@ -147,7 +233,6 @@ local function is_spell_allowed(spell_enable_check, next_cast_allowed_time, spel
     -- All checks passed at this point so we can go ahead with the logics
 
     return true
-
 end
 
 local function generate_points_around_target(target_position, radius, num_points)
@@ -196,11 +281,25 @@ local function get_best_point(target_position, circle_radius, current_hit_list)
 end
 
 function is_target_within_angle(origin, reference, target, max_angle)
-    local to_reference = (reference - origin):normalize();
-    local to_target = (target - origin):normalize();
-    local dot_product = to_reference:dot(to_target);
-    local angle = math.deg(math.acos(dot_product));
-    return angle <= max_angle;
+    -- Create vector from origin to reference and normalize it
+    local to_reference = vec3.new(reference:x() - origin:x(), reference:y() - origin:y(), reference:z() - origin:z())
+    to_reference = to_reference:normalize()
+    
+    -- Create vector from origin to target and normalize it
+    local to_target = vec3.new(target:x() - origin:x(), target:y() - origin:y(), target:z() - origin:z())
+    to_target = to_target:normalize()
+    
+    -- Calculate the dot product
+    local dot_product = to_reference:dot(to_target)
+    
+    -- Ensure dot product is in valid range for acos
+    dot_product = math.max(-1.0, math.min(1.0, dot_product))
+    
+    -- Calculate the angle in degrees
+    local angle = math.deg(math.acos(dot_product))
+    
+    -- Return true if angle is less than or equal to max_angle
+    return angle <= max_angle
 end
 
 local function generate_points_around_target_rec(target_position, radius, num_points)
@@ -239,20 +338,32 @@ local function get_best_point_rec(target_position, rectangle_radius, width, curr
     return {point = target_position, hits = current_hit_list_amount, victim_list = current_hit_list}
 end
 
+-- Define spell delays for better timing control
+local spell_delays = {
+    regular_cast = 0.2,
+    channel_cast = 0.5,
+    no_delay = 0.0
+}
+
 -- local local_player = get_local_player()
 -- if local_player == nil then
 --     return
 -- end
 
-local plugin_label = "DEATHTRAP_ROGUE_PLUGIN_" -- add character name...
+local targeting_modes = {"Best Ranged", "Best Melee", "Best Cursor", "Closest Cursor"}
+
+local plugin_label = "DEATHTRAP_ROGUE_ENHANCED_" -- add character name...
 
 return
 {
     plugin_label = plugin_label,
     is_spell_allowed = is_spell_allowed,
     is_action_allowed = is_action_allowed,
-
     is_auto_play_enabled = is_auto_play_enabled,
+    is_buff_active = is_buff_active,
+    buff_stack_count = buff_stack_count,
+    enemy_count_in_range = enemy_count_in_range,
+    is_in_range = is_in_range,
 
     -- decrepify & bone_prision
     get_best_point = get_best_point,
@@ -263,4 +374,10 @@ return
 
     -- bone spear rect
     get_best_point_rec = get_best_point_rec,
+    
+    -- Targeting modes
+    targeting_modes = targeting_modes,
+    
+    -- Spell delays
+    spell_delays = spell_delays,
 }

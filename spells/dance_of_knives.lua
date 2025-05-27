@@ -1,5 +1,5 @@
-
 local my_utility = require("my_utility/my_utility")
+local menu_module = require("menu")
 
 local dance_of_knives_menu_elements_base =
 {
@@ -10,13 +10,11 @@ local dance_of_knives_menu_elements_base =
     interval   = slider_float:new(0.0, 5.0, 0.40, get_hash(my_utility.plugin_label .. "dance_knives_interval")),
 }
 
-local function menu()
+local function render_menu()
     if dance_of_knives_menu_elements_base.main_tab:push("Dance of Knives") then
         dance_of_knives_menu_elements_base.main_boolean:render("Enable Spell", "")
 
         if dance_of_knives_menu_elements_base.main_boolean:get() then
-
-
             dance_of_knives_menu_elements_base.distance:render("Distance", "", 2)
             dance_of_knives_menu_elements_base.animation_delay:render("Animation Delay", "", 2)
             dance_of_knives_menu_elements_base.interval:render("Interval", "", 2)
@@ -41,10 +39,23 @@ local function logics(target)
         return false
     end
 
-    local enemies = actors_manager.get_enemy_npcs();
-    local distance = dance_of_knives_menu_elements_base.distance:get()
-
     local player_position = get_player_position()
+    
+    -- Check for minimum enemy count (global setting)
+    local distance = dance_of_knives_menu_elements_base.distance:get()
+    local all_units_count, normal_units_count, elite_units_count, champion_units_count, boss_units_count = 
+        my_utility.enemy_count_in_range(distance, player_position)
+    
+    -- Get global minimum enemy count setting
+    local global_min_enemies = menu_module.menu_elements.enemy_count_threshold:get()
+    
+    -- Skip if not enough enemies and no special units
+    if all_units_count < global_min_enemies and 
+       elite_units_count == 0 and champion_units_count == 0 and boss_units_count == 0 then
+        return false
+    end
+
+    local enemies = actors_manager.get_enemy_npcs();
     local is_wall_collision = target_selector.is_wall_collision(player_position, target, 1.20);
     if is_wall_collision then
         return false;
@@ -69,6 +80,6 @@ end
 
 return
 {
-    menu = menu,
+    menu = render_menu,
     logics = logics,
 }

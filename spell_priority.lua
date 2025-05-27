@@ -1,56 +1,49 @@
--- Spell priority configuration for Rouge class
+-- Spell priority configuration for Rogue class
 -- Spells are sorted from highest priority to lowest priority
+-- This rotation is optimized for the Death Trap Pit Push build from Mobalytics
 
 local spell_priority = {
-    -- Ultimate abilities
-    "rain_of_arrows",
-    "shadow_clone",
-
-    -- High priority damage abilities
-    "penetrating_shot",
-    "dance_of_knives",
-    "heartseeker",
-    "twisting_blade",
-
-    -- Mobility and utility
+    -- Concealment and Death Trap are the primary damage dealers
+    "concealment",
+    "death_trap",
+    
+    -- Control abilities that need to be maintained
+    "caltrop",
+    "poison_trap",
+    
+    -- Close Quarter Combat maintainers
     "shadow_step",
-    "dash",
-    "smoke_grenade",
-
+    "penetrating_shot",
+    
+    -- Mobility skills with Momentum stacking
+    "evade",
+    
     -- Imbuements and buffs
     "shadow_imbuement",
     "poison_imbuement",
     "cold_imbuement",
-
-    -- Control and setup
-    "poison_trap",
-    "death_trap",
-    "caltrop",
-
-    -- Basic damage abilities
+    
+    -- Secondary damage abilities
+    "dance_of_knives",
+    "rain_of_arrows",
+    
+    -- Utility and defensive abilities
+    "shadow_clone",
+    "smoke_grenade",
+    "dark_shroud",
+    
+    -- Backup damage abilities
+    "heartseeker",
+    "twisting_blade",
+    "barrage",
     "rapid_fire",
     "forcefull_arrow",
     "flurry",
-    "barrage",
-
-    -- Defensive abilities
-    "concealment",
-    "dark_shroud",
+    
+    -- Basic attacks
     "blade_shift",
-
-    -- Basic attacks and fillers
     "invigorating_strike",
     "puncture"
 }
 
--- Create a lookup table for quick priority checking
-local priority_lookup = {}
-for index, spell_name in ipairs(spell_priority) do
-    priority_lookup[spell_name] = index
-end
-
--- Return both tables in a single table
-return {
-    spell_priority = spell_priority,
-    priority_lookup = priority_lookup
-}
+return spell_priority

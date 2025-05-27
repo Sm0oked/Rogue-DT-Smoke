@@ -1,9 +1,10 @@
 local my_utility = require("my_utility/my_utility")
 local my_target_selector = require("my_utility/my_target_selector")
+local menu_module = require("menu")
 
-local menu_elements_caltrop = {
+local menu_elements = {
     tree_tab = tree_node:new(1),
-    enabled = checkbox:new(true, get_hash(my_utility.plugin_label .. "caltrop_enabled")),
+    main_boolean = checkbox:new(true, get_hash(my_utility.plugin_label .. "caltrop_enabled")),
     min_enemies = slider_int:new(1, 5, 1, get_hash(my_utility.plugin_label .. "caltrop_min_enemies")),
     cast_range = slider_float:new(1.0, 25.0, 15.0, get_hash(my_utility.plugin_label .. "caltrop_cast_range")), -- Increased range
     cast_delay = slider_float:new(0.0, 2.0, 0.05, get_hash(my_utility.plugin_label .. "caltrop_cast_delay")), -- Reduced default delay
@@ -11,18 +12,18 @@ local menu_elements_caltrop = {
     cast_mode = combo_box:new(2, get_hash(my_utility.plugin_label .. "caltrop_cast_mode")) -- Default to Aggressive mode
 }
 
-local function menu()
-    if menu_elements_caltrop.tree_tab:push("Caltrop") then
-        menu_elements_caltrop.enabled:render("Enable Spell", "")
-        if menu_elements_caltrop.enabled:get() then
-            menu_elements_caltrop.min_enemies:render("Minimum Enemies", "Minimum number of enemies required")
-            menu_elements_caltrop.cast_range:render("Cast Range", "Maximum casting range", 1)
-            menu_elements_caltrop.cast_delay:render("Cast Delay", "Time between casts", 3)
-            menu_elements_caltrop.aoe_radius:render("AoE Check Radius", "Radius to check for enemy clusters", 1)
+local function render_menu()
+    if menu_elements.tree_tab:push("Caltrop") then
+        menu_elements.main_boolean:render("Enable Spell", "")
+        if menu_elements.main_boolean:get() then
+            menu_elements.min_enemies:render("Minimum Enemies", "Minimum number of enemies required")
+            menu_elements.cast_range:render("Cast Range", "Maximum casting range", 1)
+            menu_elements.cast_delay:render("Cast Delay", "Time between casts", 3)
+            menu_elements.aoe_radius:render("AoE Check Radius", "Radius to check for enemy clusters", 1)
             local options = {"Always", "Defensive Only", "Aggressive"}
-            menu_elements_caltrop.cast_mode:render("Cast Mode", options, "When to use Caltrop")
+            menu_elements.cast_mode:render("Cast Mode", options, "When to use Caltrop")
         end
-        menu_elements_caltrop.tree_tab:pop()
+        menu_elements.tree_tab:pop()
     end
 end
 
@@ -33,8 +34,8 @@ local last_cast_position = nil
 local function get_best_cast_position(entity_list, player_position)
     local best_pos = nil
     local max_enemies = 0
-    local cast_range = menu_elements_caltrop.cast_range:get()
-    local aoe_radius = menu_elements_caltrop.aoe_radius:get()
+    local cast_range = menu_elements.cast_range:get()
+    local aoe_radius = menu_elements.aoe_radius:get()
 
     -- First priority: Find position with most enemies
     for _, enemy in ipairs(entity_list) do
@@ -55,7 +56,7 @@ local function get_best_cast_position(entity_list, player_position)
     end
 
     -- Second priority: If no good cluster found or in aggressive mode, target any enemy
-    if not best_pos or menu_elements_caltrop.cast_mode:get() == 2 then
+    if not best_pos or menu_elements.cast_mode:get() == 2 then
         for _, enemy in ipairs(entity_list) do
             local enemy_pos = enemy:get_position()
             if enemy_pos:squared_dist_to_ignore_z(player_position) <= (cast_range * cast_range) then
@@ -67,9 +68,16 @@ local function get_best_cast_position(entity_list, player_position)
     return best_pos, max_enemies
 end
 
-local function logics(entity_list, target_selector_data, closest_target)
+-- Updated logics function to handle different parameter sets
+local function logics(entity_list, target_selector_data, target)
+    -- Handle case when called with single target parameter
+    if not target_selector_data and entity_list and entity_list.get_position then
+        target = entity_list
+        entity_list = actors_manager.get_enemy_npcs()
+    end
+    
     -- Basic checks
-    if not menu_elements_caltrop.enabled:get() then
+    if not menu_elements.main_boolean:get() then
         return false
     end
 
@@ -84,7 +92,33 @@ local function logics(entity_list, target_selector_data, closest_target)
 
     -- Get player position and cast mode
     local player_position = get_player_position()
-    local cast_mode = menu_elements_caltrop.cast_mode:get()
+    local cast_mode = menu_elements.cast_mode:get()
+
+    -- Ensure we have valid entity_list
+    if not entity_list or #entity_list == 0 then
+        entity_list = actors_manager.get_enemy_npcs()
+        if #entity_list == 0 then
+            return false
+        end
+    end
+
+    -- Check for minimum enemy count (global setting)
+    local aoe_radius = menu_elements.aoe_radius:get()
+    local all_units_count, normal_units_count, elite_units_count, champion_units_count, boss_units_count = 
+        my_utility.enemy_count_in_range(aoe_radius, player_position)
+    
+    -- Get global minimum enemy count setting
+    local global_min_enemies = menu_module.menu_elements.enemy_count_threshold:get()
+    local spell_min_enemies = menu_elements.min_enemies:get()
+    
+    -- Use the higher of the two thresholds
+    local effective_min_enemies = math.max(global_min_enemies, spell_min_enemies)
+    
+    -- Skip if not enough enemies and no special units
+    if all_units_count < effective_min_enemies and 
+       elite_units_count == 0 and champion_units_count == 0 and boss_units_count == 0 then
+        return false
+    end
 
     -- Find best position to cast
     local cast_position, enemies_hit = get_best_cast_position(entity_list, player_position)
@@ -110,7 +144,7 @@ local function logics(entity_list, target_selector_data, closest_target)
 
     -- Attempt to cast
     if cast_spell.position(spell_id, cast_position, 0.0) then
-        next_cast_time = current_time + menu_elements_caltrop.cast_delay:get()
+        next_cast_time = current_time + menu_elements.cast_delay:get()
         last_cast_position = cast_position
         console.print(string.format("Rouge Plugin: Casted Caltrop hitting %d enemies", enemies_hit))
         return true
@@ -120,6 +154,7 @@ local function logics(entity_list, target_selector_data, closest_target)
 end
 
 return {
-    menu = menu,
-    logics = logics
+    menu = render_menu,
+    logics = logics,
+    menu_elements = menu_elements
 }
