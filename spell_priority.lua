@@ -17,6 +17,7 @@ local spell_priority = {
     
     -- Mobility skills with Momentum stacking
     "evade",
+    "dash",
     
     -- Imbuements and buffs
     "shadow_imbuement",

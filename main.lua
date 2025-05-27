@@ -45,6 +45,7 @@ local spells =
     rain_of_arrows          = require("spells/rain_of_arrows"),
     dance_of_knives         = require("spells/dance_of_knives"),
     evade                  = require("spells/evade"),
+    dash                   = require("spells/dash"),
 }
 
 -- Add tracking variables for spell timings and cooldowns
@@ -56,6 +57,7 @@ if not _G.last_poison_trap_time then _G.last_poison_trap_time = 0 end
 if not _G.last_caltrop_time then _G.last_caltrop_time = 0 end
 if not _G.last_penetrating_shot_time then _G.last_penetrating_shot_time = 0 end
 if not _G.last_health_potion_time then _G.last_health_potion_time = 0 end
+if not _G.last_dash_time then _G.last_dash_time = 0 end
 if not _G.initial_momentum_stacked then _G.initial_momentum_stacked = false end
 
 -- Variables for casting
@@ -476,6 +478,14 @@ on_update(function()
             cast_end_time = current_time + 0.2
             return
         end
+
+        -- Try to use dash for momentum stacking
+        if current_time - _G.last_dash_time > 0.2 and spells.dash.logics(best_target or closest_target) then
+            _G.last_dash_time = current_time
+            console.print("Used Dash for momentum stacking")
+            cast_end_time = current_time + 0.2
+            return
+        end
         
         -- Important: Even if best_target or closest_target is nil, the improved evade.logics can handle it
         -- The evade.logics function now has fallback mechanisms if target is invalid
@@ -613,15 +623,23 @@ on_update(function()
             result = spell.logics(target_list, target_selector_data_all, best_target, closest_target)
             if result then
                 cast_end_time = current_time + 0.2
-        return
-    end
+                return
+            end
         elseif spell_name == "evade" then
             -- Special case for evade
             result = spell.logics(best_target)
             if result then
                 cast_end_time = current_time + 0.2
-        return
-    end
+                return
+            end
+        elseif spell_name == "dash" then
+            -- Special case for dash
+            result = spell.logics(best_target)
+            if result then
+                _G.last_dash_time = current_time
+                cast_end_time = current_time + 0.2
+                return
+            end
         elseif spell_name == "heartseeker" then
             -- Special case for heartseeker that uses sorted entity list
             if is_best_target_exception then

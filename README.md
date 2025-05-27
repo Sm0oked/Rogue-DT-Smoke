@@ -57,6 +57,7 @@
    - Added confirmation messages for momentum stacking
    - Added completion notification when momentum stacking is finished
    - Better safety checks for spell casting
+   - Re-added Dash ability to rotation for improved mobility
 
 4. **Targeting Improvements:**
    - Added minimum enemy distance setting to maintain safer positioning
