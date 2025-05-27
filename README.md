@@ -40,6 +40,29 @@
    - Special handling for elites, champions, and bosses
    - Bonus scoring for vulnerable enemies
 
+## Recent Changes (Last Updated: 2023-07-11)
+
+1. **Improved Evade Functionality:**
+   - Fixed momentum stacking with more robust evade implementation
+   - Added fallback mechanisms when target is nil or invalid
+   - Enhanced error handling to prevent casting failures
+   - Improved feedback via console messages for tracking stacking progress
+
+2. **Debug Enhancements:**
+   - Added comprehensive debug output for evade spell
+   - Enabled debug by default for easier troubleshooting
+   - Added menu option to toggle debug information
+
+3. **Quality of Life Improvements:**
+   - Added confirmation messages for momentum stacking
+   - Added completion notification when momentum stacking is finished
+   - Better safety checks for spell casting
+
+4. **Targeting Improvements:**
+   - Added minimum enemy distance setting to maintain safer positioning
+   - Removed boss-specific targeting priority for more consistent rotation
+   - Improved target selection based on minimum distance requirements
+
 ## Usage Guide
 
 1. **Basic Setup:**

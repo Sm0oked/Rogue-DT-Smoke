@@ -18,7 +18,6 @@ local menu_elements =
     spell_range          = slider_float:new(1.0, 15.0, 3.50, get_hash(my_utility.plugin_label .. "death_trap_spell_range_2")),
     spell_radius         = slider_float:new(0.50, 10.0, 5.50, get_hash(my_utility.plugin_label .. "death_trap_spell_radius_2")),
     debug_enabled        = checkbox:new(false, get_hash(my_utility.plugin_label .. "debug_enabled_death_trap")),
-    boss_range_bonus     = slider_float:new(1.0, 10.0, 3.0, get_hash(my_utility.plugin_label .. "boss_range_bonus_death_trap")),
 }
 
 local function render_menu()
@@ -40,7 +39,6 @@ local function render_menu()
 
         menu_elements.spell_range:render("Spell Range", "", 1)
         menu_elements.spell_radius:render("Spell Radius", "", 1)
-        menu_elements.boss_range_bonus:render("Boss Range Bonus", "Extra range when targeting bosses", 1)
         menu_elements.debug_enabled:render("Enable Debug", "Show debug information")
 
         menu_elements.tree_tab:pop();
@@ -90,41 +88,6 @@ local function logics(entity_list, target_selector_data, best_target)
     -- Get spell parameters
     local spell_range = menu_elements.spell_range:get()
     local spell_radius = menu_elements.spell_radius:get()
-    
-    -- Check for boss targets first (priority)
-    local boss_target = nil
-    local boss_pos = nil
-    local boss_range_bonus = menu_elements.boss_range_bonus:get()
-    
-    -- Look for bosses in the entity list
-    for _, entity in ipairs(entity_list) do
-        if entity:is_boss() then
-            local distance = player_position:dist_to_ignore_z(entity:get_position())
-            -- Give bosses extra range
-            if distance <= (spell_range + boss_range_bonus) then
-                boss_target = entity
-                boss_pos = entity:get_position()
-                
-                if debug_enabled then 
-                    console.print(string.format("Death Trap: Found boss target at distance %.2f", distance))
-                end
-                
-                break
-            end
-        end
-    end
-    
-    -- If we found a boss, cast immediately on it
-    if boss_target and boss_pos then
-        if cast_spell.position(death_trap_spell_id, boss_pos, 0.40) then
-            next_time_allowed_cast = current_time + 0.01
-            console.print("Rouge Plugin: Casted Death Trap on Boss")
-            return true
-        else
-            if debug_enabled then console.print("Death Trap: Failed to cast on boss") end
-            return false
-        end
-    end
 
     -- Check for minimum enemy count (global setting)
     local all_units_count, normal_units_count, elite_units_count, champion_units_count, boss_units_count = 

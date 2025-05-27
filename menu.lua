@@ -11,6 +11,7 @@ local menu_elements =
     settings_tree       = tree_node:new(1),
     enemy_count_threshold = slider_int:new(1, 10, 1, get_hash(my_utility.plugin_label .. "enemy_count_threshold")),
     max_targeting_range = slider_int:new(5, 40, 30, get_hash(my_utility.plugin_label .. "max_targeting_range")),
+    min_enemy_distance = slider_float:new(0.0, 15.0, 0.0, get_hash(my_utility.plugin_label .. "min_enemy_distance")),
     cursor_targeting_radius = slider_float:new(1.0, 10.0, 5.0, get_hash(my_utility.plugin_label .. "cursor_targeting_radius")),
     cursor_targeting_angle = slider_int:new(10, 180, 45, get_hash(my_utility.plugin_label .. "cursor_targeting_angle")),
     best_target_evaluation_radius = slider_float:new(1.0, 15.0, 5.0, get_hash(my_utility.plugin_label .. "best_target_evaluation_radius")),

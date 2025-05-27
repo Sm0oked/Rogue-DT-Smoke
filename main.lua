@@ -85,6 +85,8 @@ on_render_menu(function()
             "       Time between target checks in seconds       ", 1)
         menu.menu_elements.max_targeting_range:render("Max Targeting Range",
             "       Maximum range for targeting       ")
+        menu.menu_elements.min_enemy_distance:render("Minimum Enemy Distance",
+            "       Minimum distance to enemies before targeting them       ", 1)
         menu.menu_elements.cursor_targeting_radius:render("Cursor Targeting Radius",
             "       Area size for selecting target around the cursor       ", 1)
         menu.menu_elements.cursor_targeting_angle:render("Cursor Targeting Angle",
@@ -239,6 +241,8 @@ local function evaluate_targets(target_list, melee_range)
     local best_target_evaluation_radius = menu.menu_elements.best_target_evaluation_radius:get()
     local cursor_targeting_angle = menu.menu_elements.cursor_targeting_angle:get()
     local enemy_count_threshold = menu.menu_elements.enemy_count_threshold:get()
+    local min_enemy_distance = menu.menu_elements.min_enemy_distance:get()
+    local min_enemy_distance_sqr = min_enemy_distance * min_enemy_distance
     local closest_cursor_distance_sqr = math.huge
 
     for _, unit in ipairs(target_list) do
@@ -248,6 +252,11 @@ local function evaluate_targets(target_list, melee_range)
         local distance_sqr = unit_position:squared_dist_to_ignore_z(player_position)
         local cursor_distance_sqr = unit_position:squared_dist_to_ignore_z(cursor_position)
         local buffs = unit:get_buffs()
+
+        -- Skip enemies that are too close based on min_enemy_distance setting
+        if distance_sqr < min_enemy_distance_sqr then
+            goto continue
+        end
 
         -- Get enemy count in range of enemy unit
         local all_units_count, normal_units_count, elite_units_count, champion_units_count, boss_units_count = my_utility.enemy_count_in_range(best_target_evaluation_radius, unit_position)
@@ -484,7 +493,7 @@ on_update(function()
     if _G.initial_momentum_stacked and current_time - _G.last_health_potion_time > 30 then
         if utility.use_health_potion() then
             _G.last_health_potion_time = current_time
-            cast_end_time = current_time + 0.2
+        cast_end_time = current_time + 0.2
             return
         end
     end
@@ -505,7 +514,7 @@ on_update(function()
         if spells.penetrating_shot.logics(target_list, target_selector_data_all, best_target) then
             _G.last_penetrating_shot_time = current_time
         cast_end_time = current_time + 0.3
-            return
+        return
         end
     end
 
@@ -531,25 +540,6 @@ on_update(function()
 
     -- 5. Concealment → Death Trap loop (primary damage dealers)
     if _G.initial_momentum_stacked then
-        -- Check for boss targets first - immediately use Death Trap on bosses
-        local boss_target = nil
-        for _, entity in ipairs(target_list) do
-            if entity:is_boss() then
-                boss_target = entity
-                break
-            end
-        end
-        
-        if boss_target and spells.death_trap and spells.death_trap.logics then
-            -- Try Death Trap on boss target
-            if current_time - _G.last_death_trap_time > 0.05 and spells.death_trap.logics(target_list, target_selector_data_all, boss_target) then
-                _G.last_death_trap_time = current_time
-                cast_end_time = current_time + 0.05
-                console.print("Rouge Plugin: Used Death Trap on boss target")
-                return
-            end
-        end
-        
         -- Try Concealment first (if not recently used)
         if current_time - _G.last_concealment_time > 0.5 and spells.concealment.logics() then
             _G.last_concealment_time = current_time
@@ -635,16 +625,16 @@ on_update(function()
         elseif spell_name == "heartseeker" then
             -- Special case for heartseeker that uses sorted entity list
             if is_best_target_exception then
-                local sorted_entities = {}
+    local sorted_entities = {}
                 for i, v in ipairs(target_list) do
-                    sorted_entities[i] = v
-                end
+        sorted_entities[i] = v
+    end
 
-                table.sort(sorted_entities, function(a, b)
-                    return my_target_selector.get_unit_weight(a) > my_target_selector.get_unit_weight(b)
-                end)
+    table.sort(sorted_entities, function(a, b)
+        return my_target_selector.get_unit_weight(a) > my_target_selector.get_unit_weight(b)
+    end)
 
-                for _, unit in ipairs(sorted_entities) do
+    for _, unit in ipairs(sorted_entities) do
                     if spell.logics(unit) then
                         _G.last_heartseeker_cast_time = current_time
                         cast_end_time = current_time + spell.menu_elements_heartseeker_base.spell_cast_delay:get()
