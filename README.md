@@ -40,7 +40,76 @@
    - Special handling for elites, champions, and bosses
    - Bonus scoring for vulnerable enemies
 
-## Recent Changes (Last Updated: 2023-07-11)
+## Recent Changes
+
+### Latest Updates (Last Updated: 2025-05-27)
+
+1. **Boss Enemy Exception Added:**
+   - Added logic to bypass minimum enemy count threshold when a boss is present
+   - Ensures optimal spell usage during boss fights even with strict minimum enemy count settings
+   - Implemented consistently across all spell files (Death Trap, Poison Trap, etc.)
+   - Works alongside existing keybind override functionality
+
+2. **Fixed Minimum Enemy Count Threshold:**
+   - Resolved the issue where spells would ignore the minimum enemy count setting when elite/champion enemies were present
+   - Implemented consistent enemy count checking across all spells (Death Trap, Poison Trap, Caltrop, Dance of Knives, Rain of Arrows, Penetrating Shot)
+   - Added debugging output for easier verification of enemy counting
+   - Maintained keybind override functionality for manual casting regardless of enemy count
+
+3. **Enhanced Error Handling:**
+   - Improved error checking for evade spell registration
+   - Added robust error handling with pcall to prevent crashes
+   - Enhanced error reporting for easier troubleshooting
+   - Better parameter validation for all spell functions
+
+4. **Targeting System Refinements:**
+   - Fixed edge cases in target evaluation logic
+   - Improved filtering of invalid targets
+   - Better handling of targeting when minimum enemy count isn't met
+   - More consistent application of enemy count threshold across all spells
+
+5. **Performance Optimization:**
+   - Reduced unnecessary spell evaluations
+   - Implemented early returns when minimum enemy count isn't met
+   - More efficient enemy counting with cached results
+   - Better resource management during spell evaluation
+
+1. **Advanced Enemy Targeting:**
+   - Added weighted targeting system with enemy cluster detection
+   - Improved targeting for multi-enemy situations
+   - Better prioritization of dangerous enemies
+
+2. **Enhanced Spell Management:**
+   - Improved channeled spell handling for Dance of Knives
+   - Dynamic position updating during channel
+   - Automatic pause when in dangerous areas
+
+3. **Auto-Play Intelligence:**
+   - Added awareness of auto-play objectives
+   - Script adapts behavior based on current objective (combat, looting, travel)
+   - Improved mobility during travel objectives
+
+4. **Loot Management:**
+   - Automatic pickup of potions during combat when needed
+   - Collection of high-value items (gold, obols) in close proximity
+   - Integration with health potion tracking
+
+5. **Terrain Navigation:**
+   - Added walkability checks before casting positional abilities
+   - Automatic detection of inaccessible areas
+   - Finding alternative cast positions when primary target is unwalkable
+
+6. **Boss Ability Recognition:**
+   - Added detection for common dangerous boss abilities
+   - Registered specific evade patterns for Butcher and Ashava abilities
+   - Improved avoidance of circular and rectangular danger zones
+
+7. **Error Resilience:**
+   - Added robust error handling for spell registration
+   - Graceful handling of API changes
+   - Detailed error reporting for easier troubleshooting
+
+### Previous Update (Last Updated: 2023-07-11)
 
 1. **Improved Evade Functionality:**
    - Fixed momentum stacking with more robust evade implementation

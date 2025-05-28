@@ -86,18 +86,6 @@ local function logics(entity_list, target_selector_data, target)
         return false
     end
     
-    -- Check if we can skip minimum hit requirements
-    local keybind_ignore_hits = menu_elements.keybind_ignore_hits:get();
-    local keybind_can_skip = keybind_ignore_hits and keybind_used > 0;
-    
-    -- Ensure we have valid entity_list
-    if not entity_list or #entity_list == 0 then
-        entity_list = actors_manager.get_enemy_npcs()
-        if #entity_list == 0 then
-            return false
-        end
-    end
-    
     -- Check for minimum enemy count
     local spell_radius = menu_elements.spell_radius:get()
     local all_units_count, normal_units_count, elite_units_count, champion_units_count, boss_units_count = 
@@ -108,9 +96,21 @@ local function logics(entity_list, target_selector_data, target)
     local spell_min_hits = menu_elements.min_hits:get()
     local effective_min_enemies = math.max(global_min_enemies, spell_min_hits)
     
-    -- Skip if not enough enemies and no special units and not using keybind override
-    if not keybind_can_skip and all_units_count < effective_min_enemies and 
-       elite_units_count == 0 and champion_units_count == 0 and boss_units_count == 0 then
+    -- Check if there's a boss present (bypass minimum enemy count if true)
+    local boss_present = boss_units_count > 0
+    if boss_present and debug_console then
+        console.print("poison_trap: Boss detected - bypassing minimum enemy count requirement")
+    end
+    
+    -- Skip if not enough enemies and not using keybind override and no boss present
+    local keybind_ignore_hits = menu_elements.keybind_ignore_hits:get()
+    local keybind_can_skip = keybind_ignore_hits and keybind_used > 0;
+    
+    if not (keybind_can_skip or boss_present) and all_units_count < effective_min_enemies then
+        if debug_console then
+            console.print(string.format("poison_trap: Not enough enemies (%d < %d required)", 
+                all_units_count, effective_min_enemies))
+        end
         return false
     end
     

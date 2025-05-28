@@ -8,6 +8,8 @@ local dance_of_knives_menu_elements_base =
     distance   = slider_float:new(1.0, 20.0, 7.50, get_hash(my_utility.plugin_label .. "dance_knives_distance")),
     animation_delay   = slider_float:new(0.0, 5.0, 0.00, get_hash(my_utility.plugin_label .. "dance_knives_animation_delay")),
     interval   = slider_float:new(0.0, 5.0, 0.40, get_hash(my_utility.plugin_label .. "dance_knives_interval")),
+    dynamic_position = checkbox:new(true, get_hash(my_utility.plugin_label .. "dance_knives_dynamic_position")),
+    pause_in_danger = checkbox:new(true, get_hash(my_utility.plugin_label .. "dance_knives_pause_in_danger")),
 }
 
 local function render_menu()
@@ -18,6 +20,8 @@ local function render_menu()
             dance_of_knives_menu_elements_base.distance:render("Distance", "", 2)
             dance_of_knives_menu_elements_base.animation_delay:render("Animation Delay", "", 2)
             dance_of_knives_menu_elements_base.interval:render("Interval", "", 2)
+            dance_of_knives_menu_elements_base.dynamic_position:render("Dynamic Positioning", "Automatically update position as enemies move")
+            dance_of_knives_menu_elements_base.pause_in_danger:render("Pause in Danger", "Pause channeling when in dangerous area")
         end
 
         dance_of_knives_menu_elements_base.main_tab:pop()
@@ -26,8 +30,71 @@ end
 
 local spell_id_dance_of_knives = 1690398
 local next_time_allowed_cast = 0.0
+local is_currently_channeling = false
+local last_target_position = nil
+local last_channel_check_time = 0.0
+local channel_check_interval = 0.25
+
+local function update_channel_position()
+    if not is_currently_channeling or not dance_of_knives_menu_elements_base.dynamic_position:get() then
+        return
+    end
+
+    local current_time = get_time_since_inject()
+    if current_time - last_channel_check_time < channel_check_interval then
+        return
+    end
+
+    last_channel_check_time = current_time
+
+    -- Find the best target position
+    local player_position = get_player_position()
+    local distance = dance_of_knives_menu_elements_base.distance:get()
+    local enemies = actors_manager.get_enemy_npcs()
+    local best_pos = nil
+    local most_enemies = 0
+
+    for _, enemy in ipairs(enemies) do
+        local enemy_pos = enemy:get_position()
+        local nearby_count = 0
+
+        for _, other in ipairs(enemies) do
+            if enemy_pos:dist_to(other:get_position()) <= distance then
+                nearby_count = nearby_count + 1
+            end
+        end
+
+        if nearby_count > most_enemies then
+            most_enemies = nearby_count
+            best_pos = enemy_pos
+        end
+    end
+
+    -- Update the channel position if we found a better one
+    if best_pos and (not last_target_position or best_pos:dist_to(last_target_position) > 2.0) then
+        cast_spell.update_channel_spell_position(spell_id_dance_of_knives, best_pos)
+        last_target_position = best_pos
+        console.print("Updated Dance of Knives position")
+    end
+
+    -- Check if we need to pause in dangerous areas
+    if dance_of_knives_menu_elements_base.pause_in_danger:get() and evade.is_dangerous_position(player_position) then
+        cast_spell.pause_specific_channel_spell(spell_id_dance_of_knives, 1.0)
+        console.print("Paused Dance of Knives due to danger")
+    end
+end
 
 local function logics(target)
+    -- Update channel position if already channeling
+    update_channel_position()
+
+    -- Check if already channeling
+    if cast_spell.is_channel_spell_active(spell_id_dance_of_knives) then
+        is_currently_channeling = true
+        return false
+    else
+        is_currently_channeling = false
+    end
 
     local menu_boolean = dance_of_knives_menu_elements_base.main_boolean:get()
     local is_logic_allowed = my_utility.is_spell_allowed(
@@ -49,30 +116,58 @@ local function logics(target)
     -- Get global minimum enemy count setting
     local global_min_enemies = menu_module.menu_elements.enemy_count_threshold:get()
     
-    -- Skip if not enough enemies and no special units
-    if all_units_count < global_min_enemies and 
-       elite_units_count == 0 and champion_units_count == 0 and boss_units_count == 0 then
+    -- Check if there's a boss present (bypass minimum enemy count if true)
+    local boss_present = boss_units_count > 0
+    
+    -- Skip if not enough enemies total and no boss present
+    if not boss_present and all_units_count < global_min_enemies then
         return false
     end
 
-    local enemies = actors_manager.get_enemy_npcs();
-    local is_wall_collision = target_selector.is_wall_collision(player_position, target, 1.20);
-    if is_wall_collision then
-        return false;
+    local enemies = actors_manager.get_enemy_npcs()
+    local best_target = nil
+    local most_enemies = 0
+    local best_position = nil
+
+    for _, enemy in ipairs(enemies) do
+        local enemy_position = enemy:get_position()
+        local enemy_distance = player_position:dist_to(enemy_position)
+        
+        if enemy_distance < distance then
+            local nearby_count = 0
+            for _, other in ipairs(enemies) do
+                if enemy_position:dist_to(other:get_position()) <= distance then
+                    nearby_count = nearby_count + 1
+                end
+            end
+            
+            if nearby_count > most_enemies then
+                most_enemies = nearby_count
+                best_target = enemy
+                best_position = enemy_position
+            end
+        end
     end
 
-    for i, enemy in ipairs(enemies) do
-        local enemy_distance = player_position:dist_to(enemy:get_position())
-        if enemy_distance < distance then
-
-            -- adding multiple channel spells just overrides the current one 
-            cast_spell.add_channel_spell(spell_id_dance_of_knives, 0, 1, nil, get_cursor_position(),
-            dance_of_knives_menu_elements_base.animation_delay:get(), dance_of_knives_menu_elements_base.interval:get())
-            local current_time = get_time_since_inject();
-            next_time_allowed_cast = current_time;
-            console.print("Channeling dance of knives");
-
-        end
+    if best_target and best_position then
+        is_currently_channeling = true
+        last_target_position = best_position
+        
+        -- Start channel with better parameters
+        cast_spell.add_channel_spell(
+            spell_id_dance_of_knives,
+            0, -- start immediately
+            15, -- longer duration (15 seconds)
+            nil, -- no target
+            best_position,
+            dance_of_knives_menu_elements_base.animation_delay:get(),
+            dance_of_knives_menu_elements_base.interval:get()
+        )
+        
+        local current_time = get_time_since_inject()
+        next_time_allowed_cast = current_time
+        console.print("Channeling Dance of Knives at position with " .. most_enemies .. " enemies")
+        return true
     end
 
     return false
@@ -82,4 +177,5 @@ return
 {
     menu = render_menu,
     logics = logics,
+    update_channel = update_channel_position
 }

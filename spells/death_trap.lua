@@ -105,12 +105,17 @@ local function logics(entity_list, target_selector_data, best_target)
     -- Use the higher of the two thresholds
     local effective_min_enemies = math.max(global_min_enemies, spell_min_hits)
     
-    -- Skip if not enough enemies and no special units and not using keybind override
+    -- Check if there's a boss present (bypass minimum enemy count if true)
+    local boss_present = boss_units_count > 0
+    if boss_present and debug_enabled then
+        console.print("Death Trap: Boss detected - bypassing minimum enemy count requirement")
+    end
+    
+    -- Skip if not enough enemies and not using keybind override and no boss present
     local keybind_ignore_hits = menu_elements.keybind_ignore_hits:get()
     local can_bypass_threshold = (trap_mode == 1 and keybind_used > 0 and keybind_ignore_hits)
     
-    if not can_bypass_threshold and all_units_count < effective_min_enemies and 
-       elite_units_count == 0 and champion_units_count == 0 and boss_units_count == 0 then
+    if not (can_bypass_threshold or boss_present) and all_units_count < effective_min_enemies then
         if debug_enabled then 
             console.print(string.format("Death Trap: Not enough enemies (%d < %d required)", 
                 all_units_count, effective_min_enemies))
@@ -124,36 +129,77 @@ local function logics(entity_list, target_selector_data, best_target)
         return false
     end
 
-    local cast_position_a = area_data.main_target:get_position()
-    local best_cast_data = my_utility.get_best_point(cast_position_a, spell_radius, area_data.victim_list)
- 
-    -- Check range only
-    local closer_target_to_zone = nil
+    -- Get best cast position
+    local cast_position = area_data.main_target:get_position()
+    local best_cast_data = my_utility.get_best_point(cast_position, spell_radius, area_data.victim_list)
+    
+    -- Ensure cast position is in range
     local closest_distance_sqr = math.huge
-
     for _, victim in ipairs(best_cast_data.victim_list) do
-        local victim_position = victim:get_position()
-        local distance_sqr = player_position:squared_dist_to_ignore_z(victim_position)
-        
-        if distance_sqr < closest_distance_sqr then
-            closer_target_to_zone = victim
-            closest_distance_sqr = distance_sqr
-        end
+        local distance_sqr = player_position:squared_dist_to_ignore_z(victim:get_position())
+        closest_distance_sqr = math.min(closest_distance_sqr, distance_sqr)
     end
     
-    if closest_distance_sqr > (spell_range * spell_range) then
-        if debug_enabled then 
-            console.print(string.format("Death Trap: Target too far (%.2f > %.2f)",
-                math.sqrt(closest_distance_sqr), spell_range))
+    if closest_distance_sqr > (spell_range * spell_range) and not keybind_can_skip then
+        if debug_enabled then
+            console.print("Death Trap: Target too far")
         end
         return false
     end
-
-    local cast_position = best_cast_data.point
-    if cast_spell.position(death_trap_spell_id, cast_position, 0.40) then
-        local current_time = get_time_since_inject()
-        next_time_allowed_cast = current_time + 0.01
+    
+    -- Check walkability of the cast position
+    if not utility.is_point_walkeable(best_cast_data.point) then
+        if debug_enabled then
+            console.print("Death Trap: Target position not walkable")
+        end
         
+        -- Try to find an alternative nearby walkable position
+        local alternative_positions = {}
+        local radius = 2.0
+        local num_points = 8
+        
+        for i = 1, num_points do
+            local angle = (i - 1) * (2 * math.pi / num_points)
+            local x = best_cast_data.point:x() + radius * math.cos(angle)
+            local y = best_cast_data.point:y() + radius * math.sin(angle)
+            local alt_pos = vec3.new(x, y, best_cast_data.point:z())
+            
+            if utility.is_point_walkeable(alt_pos) then
+                table.insert(alternative_positions, alt_pos)
+            end
+        end
+        
+        -- Use the closest walkable position if any were found
+        if #alternative_positions > 0 then
+            local best_alt_pos = nil
+            local min_dist = math.huge
+            
+            for _, pos in ipairs(alternative_positions) do
+                local dist = player_position:dist_to(pos)
+                if dist < min_dist then
+                    min_dist = dist
+                    best_alt_pos = pos
+                end
+            end
+            
+            if best_alt_pos then
+                best_cast_data.point = best_alt_pos
+                if debug_enabled then
+                    console.print("Death Trap: Using alternative walkable position")
+                end
+            else
+                return false
+            end
+        else
+            return false
+        end
+    end
+    
+    -- Cast the spell
+    if cast_spell.position(death_trap_spell_id, best_cast_data.point, 0.40) then
+        next_time_allowed_cast = current_time + 0.01
+        global_poison_trap_last_cast_time = current_time
+        global_poison_trap_last_cast_position = best_cast_data.point
         console.print(string.format("Rouge Plugin: Casted Death Trap hitting ~%d enemies", #best_cast_data.victim_list))
         return true
     else

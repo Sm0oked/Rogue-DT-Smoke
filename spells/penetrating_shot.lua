@@ -97,9 +97,11 @@ local function logics(entity_list, target_selector_data, best_target)
     -- Use the higher of the two thresholds
     local effective_min_enemies = math.max(global_min_enemies, spell_min_hits)
     
-    -- Skip if not enough enemies and no special units and not using keybind override
-    if not keybind_can_skip and all_units_count < effective_min_enemies and 
-       elite_units_count == 0 and champion_units_count == 0 and boss_units_count == 0 then
+    -- Check if there's a boss present (bypass minimum enemy count if true)
+    local boss_present = boss_units_count > 0
+    
+    -- Skip if not enough enemies and not using keybind override and no boss present
+    if not (keybind_can_skip or boss_present) and all_units_count < effective_min_enemies then
         return false
     end
     

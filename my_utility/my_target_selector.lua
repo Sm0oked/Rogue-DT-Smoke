@@ -506,6 +506,124 @@ local function is_valid_area_spell_aio(area_table, min_hits, entity_list, min_pe
     return false;
 end
 
+-- Weighted targeting system
+-- Scans for targets in a radius and assigns weights based on target type
+-- Finds clusters of enemies and targets the highest-weight unit in the highest-weight cluster
+local last_scan_time = 0
+local cached_weighted_target = nil
+local cached_target_list = {}
+
+local function get_weighted_target(source, scan_radius, min_targets, comparison_radius, boss_weight, elite_weight, champion_weight, any_weight, refresh_rate, damage_resistance_provider_weight, damage_resistance_receiver_penalty, vulnerable_debuff_weight)
+    local current_time = get_time_since_inject()
+    
+    -- Only scan for new targets if refresh time has passed
+    if current_time - last_scan_time >= refresh_rate then
+        last_scan_time = current_time
+        cached_target_list = target_selector.get_near_target_list(source, scan_radius)
+        
+        -- If we don't have enough targets, return nil
+        if #cached_target_list < min_targets then
+            cached_weighted_target = nil
+            return nil
+        end
+        
+        -- Calculate base weights for each target (without nearby bonus)
+        local weighted_targets = {}
+        for _, unit in ipairs(cached_target_list) do
+            local base_weight = any_weight
+            
+            -- Assign weight based on target type
+            if unit:is_boss() then
+                base_weight = boss_weight
+            elseif unit:is_elite() then
+                base_weight = elite_weight
+            elseif unit:is_champion() then
+                base_weight = champion_weight
+            end
+            
+            -- Check for damage resistance buff and vulnerable debuff
+            local buffs = unit:get_buffs()
+            local has_vulnerable_debuff = false
+            for _, buff in ipairs(buffs) do
+                if spell_data.enemies and spell_data.enemies.damage_resistance and 
+                   buff.name_hash == spell_data.enemies.damage_resistance.spell_id then
+                    -- If the enemy is the provider of the damage resistance aura
+                    if spell_data.enemies.damage_resistance.buff_ids and 
+                       buff.type == spell_data.enemies.damage_resistance.buff_ids.provider then
+                        base_weight = base_weight + damage_resistance_provider_weight
+                        break
+                    else -- Otherwise the enemy is the receiver of the damage resistance aura
+                        base_weight = base_weight - damage_resistance_receiver_penalty
+                        break
+                    end
+                end
+                -- Check for Vulnerable debuff
+                if buff.name_hash == 298962 or buff.name_hash == 39809 then
+                    has_vulnerable_debuff = true
+                end
+            end
+            if has_vulnerable_debuff then
+                base_weight = base_weight + vulnerable_debuff_weight
+            end
+            
+            -- Store unit with its calculated weight
+            table.insert(weighted_targets, {
+                unit = unit,
+                weight = base_weight,
+                position = unit:get_position()
+            })
+        end
+        
+        -- Find clusters of enemies and calculate cluster weights
+        local clusters = {}
+        local processed = {}
+        
+        for i, target in ipairs(weighted_targets) do
+            if not processed[i] then
+                -- Start a new cluster with this target
+                local cluster = {
+                    targets = {target},
+                    total_weight = target.weight,
+                    highest_weight_unit = target.unit,
+                    highest_weight = target.weight
+                }
+                processed[i] = true
+                
+                -- Find all targets within comparison_radius of this target
+                for j, other_target in ipairs(weighted_targets) do
+                    if i ~= j and not processed[j] then
+                        if target.position:dist_to(other_target.position) <= comparison_radius then
+                            -- Add to cluster
+                            table.insert(cluster.targets, other_target)
+                            cluster.total_weight = cluster.total_weight + other_target.weight
+                            processed[j] = true
+                            
+                            -- Update highest weight unit in this cluster if needed
+                            if other_target.weight > cluster.highest_weight then
+                                cluster.highest_weight_unit = other_target.unit
+                                cluster.highest_weight = other_target.weight
+                            end
+                        end
+                    end
+                end
+                
+                table.insert(clusters, cluster)
+            end
+        end
+        
+        -- Sort clusters by total weight (highest first)
+        table.sort(clusters, function(a, b) return a.total_weight > b.total_weight end)
+        -- Cache the highest weighted target from the highest weight cluster
+        if #clusters > 0 then
+            cached_weighted_target = clusters[1].highest_weight_unit
+        else
+            cached_weighted_target = nil
+        end
+    end
+    
+    return cached_weighted_target
+end
+
 return
 {
     get_target_list = get_target_list,
@@ -521,4 +639,7 @@ return
 
     get_unit_weight = get_unit_weight,
     get_best_weighted_target = get_best_weighted_target,
+    
+    -- Weighted targeting system
+    get_weighted_target = get_weighted_target
 }

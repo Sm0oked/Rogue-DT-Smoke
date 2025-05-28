@@ -387,6 +387,146 @@ local function is_dangerous_position(position)
     return all_units_count > 5
 end
 
+-- Register common dangerous boss abilities
+-- These registrations only happen once when the script loads
+local function register_dangerous_spells()
+    -- Wrap dangerous spell registrations in pcall to catch errors
+    local function try_register_circular_spell(internal_names, menu_name, radius, color, danger, explosion_delay, is_moving, set_to_player, set_to_player_delay)
+        local success, result = pcall(function()
+            return evade.register_circular_spell(
+                internal_names, 
+                menu_name, 
+                radius, 
+                color, 
+                danger, 
+                explosion_delay,
+                is_moving,
+                set_to_player,
+                set_to_player_delay
+            )
+        end)
+        
+        if not success then
+            console.print("Error registering circular spell '" .. menu_name .. "': " .. tostring(result))
+        end
+    end
+    
+    local function try_register_rectangular_spell(id, names, width, length, color, is_dynamic, danger, is_project, project_speed, max_time, set_to_player, set_to_player_delay)
+        local success, result = pcall(function()
+            return evade.register_rectangular_spell(
+                id,
+                names, 
+                width, length, 
+                color,
+                is_dynamic, 
+                danger,
+                is_project, 
+                project_speed, 
+                max_time,
+                set_to_player,
+                set_to_player_delay
+            )
+        end)
+        
+        if not success then
+            console.print("Error registering rectangular spell '" .. id .. "': " .. tostring(result))
+        end
+    end
+    
+    local function try_register_cone_spell(id, names, radius, angle, color, danger, explosion_delay, is_moving)
+        local success, result = pcall(function()
+            return evade.register_cone_spell(
+                id,
+                names, 
+                radius, 
+                angle, 
+                color,
+                danger,
+                explosion_delay,
+                is_moving
+            )
+        end)
+        
+        if not success then
+            console.print("Error registering cone spell '" .. id .. "': " .. tostring(result))
+        end
+    end
+
+    -- Butcher abilities
+    try_register_circular_spell(
+        {"BossTeleportSlam"}, 
+        "Teleport Slam", 
+        6.0, 
+        color_red(200), 
+        danger_level.high, 
+        0.8,
+        false,
+        false,
+        0.5
+    )
+    
+    try_register_circular_spell(
+        {"GroundSpikes"}, 
+        "Ground Spikes", 
+        4.0, 
+        color_orange(200), 
+        danger_level.medium, 
+        0.5,
+        true,
+        false,
+        0.5
+    )
+    
+    -- Ashava abilities
+    try_register_rectangular_spell(
+        "AshavasweepingStrike",
+        {"SweepingStrike"}, 
+        5.0, 10.0, 
+        color_red(180),
+        true, 
+        danger_level.high,
+        false, 
+        0, 
+        3.0,
+        false,
+        0.5
+    )
+    
+    -- Generic fireballs and projectiles (many bosses use these)
+    try_register_circular_spell(
+        {"BossFireball", "FireballImpact"}, 
+        "Boss Fireball", 
+        4.0, 
+        color_red(200), 
+        danger_level.medium, 
+        0.5,
+        false,
+        false,
+        0.5
+    )
+    
+    -- Poison/Plague areas
+    try_register_circular_spell(
+        {"PoisonCloud", "ToxicFumes"}, 
+        "Poison Area", 
+        4.5, 
+        color_green(180), 
+        danger_level.medium, 
+        0.3,
+        true,
+        false,
+        0.5
+    )
+    
+    console.print("Evade: Registered dangerous boss abilities")
+end
+
+-- Call registration once with error handling
+local success, error_message = pcall(register_dangerous_spells)
+if not success then
+    console.print("Error in register_dangerous_spells: " .. tostring(error_message))
+end
+
 return {
     menu = render_menu,
     logics = logics,

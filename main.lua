@@ -247,6 +247,30 @@ local function evaluate_targets(target_list, melee_range)
     local min_enemy_distance_sqr = min_enemy_distance * min_enemy_distance
     local closest_cursor_distance_sqr = math.huge
 
+    -- First check if we have enough enemies to satisfy the minimum enemy count threshold
+    local total_valid_enemies = 0
+    local has_boss_enemy = false
+    for _, unit in ipairs(target_list) do
+        total_valid_enemies = total_valid_enemies + 1
+        if unit:is_boss() then
+            has_boss_enemy = true
+        end
+    end
+    
+    -- If we don't have enough valid enemies total and no boss is present, return empty targets
+    if total_valid_enemies < enemy_count_threshold and not has_boss_enemy then
+        return {
+            best_ranged_target = nil,
+            best_melee_target = nil,
+            best_cursor_target = nil,
+            closest_cursor_target = nil,
+            closest_cursor_target_angle = 0,
+            ranged_max_score = 0,
+            melee_max_score = 0,
+            cursor_max_score = 0
+        }
+    end
+
     for _, unit in ipairs(target_list) do
         local unit_health = unit:get_current_health()
         local unit_name = unit:get_skin_name()
@@ -262,11 +286,6 @@ local function evaluate_targets(target_list, melee_range)
 
         -- Get enemy count in range of enemy unit
         local all_units_count, normal_units_count, elite_units_count, champion_units_count, boss_units_count = my_utility.enemy_count_in_range(best_target_evaluation_radius, unit_position)
-
-        -- If enemy count is less than threshold and unit is not elite, champion or boss, skip this unit
-        if all_units_count < enemy_count_threshold and not (unit:is_elite() or unit:is_champion() or unit:is_boss()) then
-            goto continue
-        end
 
         -- Calculate total score based on enemy count and enemy type weights
         local total_score = normal_units_count * normal_monster_value
@@ -369,6 +388,33 @@ on_update(function()
 
     local current_time = get_time_since_inject()
 
+    -- Check auto-play objective to adapt behavior
+    if my_utility.is_auto_play_enabled() then
+        local current_objective = auto_play.get_objective()
+        
+        -- Skip combat logic for non-combat objectives
+        if current_objective == objective.loot then
+            -- Only handle loot functionality
+            local nearby_items = loot_manager.get_all_items_chest_sort_by_distance()
+            for _, item in ipairs(nearby_items) do
+                if loot_manager.is_lootable_item(item, false, false) then
+                    loot_manager.loot_item_orbwalker(item)
+                    return
+                end
+            end
+            return
+        elseif current_objective == objective.sell or current_objective == objective.repair then
+            -- Skip combat rotation during selling/repairing
+            return
+        elseif current_objective == objective.travel then
+            -- During travel, only use mobility spells and avoid combat
+            if spells.evade and spells.evade.out_of_combat and current_time - _G.last_dash_time > 5.0 then
+                spells.evade.out_of_combat()
+            end
+            return
+        end
+        -- Continue with combat rotation for objective.fight
+    end
 
     -- Target selection setup with improved cached targeting
     local player_position = get_player_position()
@@ -695,6 +741,41 @@ on_update(function()
     if spells.evade and spells.evade.menu_elements and spells.evade.menu_elements.use_out_of_combat:get() then
         if spells.evade.out_of_combat() then
                     return
+        end
+    end
+    
+    -- Enhanced loot management during combat
+    if _G.initial_momentum_stacked and menu.menu_elements.main_boolean:get() then
+        -- Attempt to loot potions if needed
+        if loot_manager.is_potion_necessary() then
+            local nearby_items = loot_manager.get_all_items_chest_sort_by_distance()
+            for _, item in ipairs(nearby_items) do
+                if loot_manager.is_potion(item) and loot_manager.is_lootable_item(item, false, true) then
+                    local item_pos = item:get_position()
+                    if player_position:dist_to(item_pos) < 4.0 then
+                        if loot_manager.loot_item(item, false, true) then
+                            console.print("Looted potion during combat")
+                            _G.last_health_potion_time = current_time
+                            return
+                        end
+                    end
+                end
+            end
+        end
+        
+        -- Check for high-value items (gold, obols) in close proximity
+        local nearby_items = loot_manager.get_all_items_chest_sort_by_distance()
+        for _, item in ipairs(nearby_items) do
+            if (loot_manager.is_gold(item) or loot_manager.is_obols(item)) and 
+               not evade.is_dangerous_position(player_position) then
+                local item_pos = item:get_position()
+                if player_position:dist_to(item_pos) < 2.0 then
+                    if loot_manager.loot_item(item, true, false) then
+                        console.print("Looted currency during combat")
+                        return
+                    end
+                end
+            end
         end
     end
 end)
