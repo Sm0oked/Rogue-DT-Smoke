@@ -1,6 +1,9 @@
 local my_utility = require("my_utility/my_utility")
 local my_target_selector = require("my_utility/my_target_selector")
 local menu_module = require("menu")
+-- Add enhanced targeting and enhancements manager
+local enhanced_targeting = require("my_utility/enhanced_targeting")
+local enhancements_manager = require("my_utility/enhancements_manager")
 
 local menu_elements = {
     tree_tab = tree_node:new(1),
@@ -93,6 +96,11 @@ local function logics(entity_list, target_selector_data, target)
     -- Get player position and cast mode
     local player_position = get_player_position()
     local cast_mode = menu_elements.cast_mode:get()
+    
+    -- Update spell range info for visualization
+    local aoe_radius = menu_elements.aoe_radius:get()
+    local cast_range = menu_elements.cast_range:get()
+    enhancements_manager.update_spell_range("caltrop", cast_range, aoe_radius, last_cast_position)
 
     -- Ensure we have valid entity_list
     if not entity_list or #entity_list == 0 then
@@ -103,7 +111,6 @@ local function logics(entity_list, target_selector_data, target)
     end
 
     -- Check for minimum enemy count (global setting)
-    local aoe_radius = menu_elements.aoe_radius:get()
     local all_units_count, normal_units_count, elite_units_count, champion_units_count, boss_units_count = 
         my_utility.enemy_count_in_range(aoe_radius, player_position)
     
@@ -142,6 +149,32 @@ local function logics(entity_list, target_selector_data, target)
     -- More permissive position reuse check
     if last_cast_position and last_cast_position:squared_dist_to_ignore_z(cast_position) < (1.5 * 1.5) then
         return false
+    end
+
+    -- Check if enhanced targeting is enabled and try to use it
+    if menu_module.menu_elements.enhanced_targeting:get() and 
+       menu_module.menu_elements.aoe_optimization:get() then
+       
+        -- Apply cast mode restrictions for defensive mode
+        if cast_mode == 1 then -- Defensive Only
+            local local_player = get_local_player()
+            if local_player:get_health_percent() > 0.90 then
+                return false
+            end
+        end
+       
+        local success, hit_count = enhanced_targeting.optimize_aoe_positioning(
+            spell_id, 
+            aoe_radius, 
+            effective_min_enemies
+        )
+        
+        if success then
+            next_cast_time = current_time + menu_elements.cast_delay:get()
+            last_cast_position = player_position -- Approximate position since we don't know exact cast position
+            console.print(string.format("Rouge Plugin: Casted Caltrop using enhanced targeting, hitting ~%d enemies", hit_count))
+            return true
+        end
     end
 
     -- Attempt to cast

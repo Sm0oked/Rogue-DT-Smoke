@@ -38,13 +38,45 @@ local menu_elements =
     -- Spell categories
     spells_tree = tree_node:new(1),
     disabled_spells_tree = tree_node:new(1),
+    
+    -- New enhancement options
+    enhancements_tree = tree_node:new(1),
+    enhanced_targeting = checkbox:new(true, get_hash(my_utility.plugin_label .. "enhanced_targeting")),
+    enhanced_evade = checkbox:new(true, get_hash(my_utility.plugin_label .. "enhanced_evade")),
+    auto_resource_management = checkbox:new(true, get_hash(my_utility.plugin_label .. "auto_resource_management")),
+    auto_buff_management = checkbox:new(true, get_hash(my_utility.plugin_label .. "auto_buff_management")),
+    position_optimization = checkbox:new(false, get_hash(my_utility.plugin_label .. "position_optimization")),
+    enhanced_debug_viz = checkbox:new(false, get_hash(my_utility.plugin_label .. "enhanced_debug_viz")),
+    
+    -- Enhanced targeting options
+    enhanced_targeting_tree = tree_node:new(2),
+    aoe_optimization = checkbox:new(true, get_hash(my_utility.plugin_label .. "aoe_optimization")),
+    optimal_target_selection = checkbox:new(true, get_hash(my_utility.plugin_label .. "optimal_target_selection")),
+    
+    -- Enhanced debug options
+    enhanced_debug_tree = tree_node:new(2),
+    draw_spell_areas = checkbox:new(true, get_hash(my_utility.plugin_label .. "draw_spell_areas")),
+    draw_enemy_info = checkbox:new(true, get_hash(my_utility.plugin_label .. "draw_enemy_info")),
+    draw_resource_bars = checkbox:new(true, get_hash(my_utility.plugin_label .. "draw_resource_bars")),
 }
 
 local draw_targets_description = "Display target selection information"
 local cursor_target_description = "Visualize cursor targeting radius"
+local enhanced_targeting_description = "Enable enhanced targeting system"
+local enhanced_evade_description = "Enable enhanced evade system with dash and shadow step integration"
+local auto_resource_description = "Automatically manage resources for optimal spell usage"
+local auto_buff_description = "Automatically maintain important buffs"
+local position_optimization_description = "Automatically optimize positioning during combat"
+local enhanced_debug_description = "Enable enhanced visual debugging"
 
 return {
     menu_elements = menu_elements,
     draw_targets_description = draw_targets_description,
-    cursor_target_description = cursor_target_description
+    cursor_target_description = cursor_target_description,
+    enhanced_targeting_description = enhanced_targeting_description,
+    enhanced_evade_description = enhanced_evade_description,
+    auto_resource_description = auto_resource_description,
+    auto_buff_description = auto_buff_description,
+    position_optimization_description = position_optimization_description,
+    enhanced_debug_description = enhanced_debug_description
 }

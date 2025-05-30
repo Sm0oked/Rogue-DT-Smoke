@@ -354,30 +354,60 @@ local targeting_modes = {"Best Ranged", "Best Melee", "Best Cursor", "Closest Cu
 
 local plugin_label = "DEATHTRAP_ROGUE_ENHANCED_" -- add character name...
 
-return
-{
-    plugin_label = plugin_label,
-    is_spell_allowed = is_spell_allowed,
-    is_action_allowed = is_action_allowed,
+-- Project a point onto a line defined by a point and direction
+function project_point_on_line(line_point, line_direction, point)
+    -- Add input validation
+    if not line_point or not line_direction or not point then
+        return nil
+    end
+    
+    -- Make sure direction is normalized
+    local normalized_direction = line_direction
+    if line_direction:length_3d() > 0 then
+        normalized_direction = line_direction:normalize()
+    else
+        return nil  -- Can't project onto a zero-length direction
+    end
+    
+    -- Vector from line_point to point
+    local to_point = nil
+    pcall(function()
+        to_point = point:subtract(line_point)
+    end)
+    
+    if not to_point then
+        return nil
+    end
+    
+    -- Calculate dot product
+    local dot_product = to_point:dot(normalized_direction)
+    
+    -- Calculate projection point
+    local projection = nil
+    pcall(function()
+        projection = line_point:add(normalized_direction:multiply(dot_product))
+    end)
+    
+    return projection
+end
+
+-- Expose as part of my_utility
+local my_utility = {
+    plugin_label = "death_trap_rogue_",
     is_auto_play_enabled = is_auto_play_enabled,
     is_buff_active = is_buff_active,
     buff_stack_count = buff_stack_count,
     enemy_count_in_range = enemy_count_in_range,
     is_in_range = is_in_range,
-
-    -- decrepify & bone_prision
+    is_action_allowed = is_action_allowed,
+    is_spell_allowed = is_spell_allowed,
+    project_point_on_line = project_point_on_line,
     get_best_point = get_best_point,
     generate_points_around_target = generate_points_around_target,
-
-    -- blight
     is_target_within_angle = is_target_within_angle,
-
-    -- bone spear rect
     get_best_point_rec = get_best_point_rec,
-    
-    -- Targeting modes
     targeting_modes = targeting_modes,
-    
-    -- Spell delays
-    spell_delays = spell_delays,
+    spell_delays = spell_delays
 }
+
+return my_utility

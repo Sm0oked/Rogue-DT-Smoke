@@ -1,6 +1,8 @@
 local my_utility = require("my_utility/my_utility")
 local my_target_selector = require("my_utility/my_target_selector")
 local menu_module = require("menu")
+local enhanced_targeting = require("my_utility/enhanced_targeting")
+local enhancements_manager = require("my_utility/enhancements_manager")
 
 local menu_elements =
 {
@@ -89,6 +91,9 @@ local function logics(entity_list, target_selector_data, best_target)
     local spell_range = menu_elements.spell_range:get()
     local spell_radius = menu_elements.spell_radius:get()
 
+    -- Update spell range info for visualization
+    enhancements_manager.update_spell_range("death_trap", spell_range, spell_radius)
+    
     -- Check for minimum enemy count (global setting)
     local all_units_count, normal_units_count, elite_units_count, champion_units_count, boss_units_count = 
         my_utility.enemy_count_in_range(spell_radius, player_position)
@@ -192,6 +197,23 @@ local function logics(entity_list, target_selector_data, best_target)
             end
         else
             return false
+        end
+    end
+    
+    -- Check if enhanced targeting is enabled and try to use it
+    if menu_module.menu_elements.enhanced_targeting:get() and 
+       menu_module.menu_elements.aoe_optimization:get() then
+        local success, hit_count = enhanced_targeting.optimize_aoe_positioning(
+            death_trap_spell_id, 
+            spell_radius, 
+            effective_min_enemies
+        )
+        
+        if success then
+            next_time_allowed_cast = current_time + 0.01
+            _G.last_death_trap_time = current_time
+            console.print(string.format("Rouge Plugin: Casted Death Trap using enhanced targeting, hitting ~%d enemies", hit_count))
+            return true
         end
     end
     

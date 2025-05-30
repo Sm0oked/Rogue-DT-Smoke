@@ -1,5 +1,7 @@
 local my_utility = require("my_utility/my_utility")
 local menu_module = require("menu")
+local enhanced_targeting = require("my_utility/enhanced_targeting")
+local enhancements_manager = require("my_utility/enhancements_manager")
 
 local dance_of_knives_menu_elements_base =
 {
@@ -108,8 +110,11 @@ local function logics(target)
 
     local player_position = get_player_position()
     
-    -- Check for minimum enemy count (global setting)
+    -- Update spell range info for visualization
     local distance = dance_of_knives_menu_elements_base.distance:get()
+    enhancements_manager.update_spell_range("dance_of_knives", distance, distance, last_target_position)
+    
+    -- Check for minimum enemy count (global setting)
     local all_units_count, normal_units_count, elite_units_count, champion_units_count, boss_units_count = 
         my_utility.enemy_count_in_range(distance, player_position)
     
@@ -124,50 +129,70 @@ local function logics(target)
         return false
     end
 
-    local enemies = actors_manager.get_enemy_npcs()
-    local best_target = nil
-    local most_enemies = 0
-    local best_position = nil
-
-    for _, enemy in ipairs(enemies) do
-        local enemy_position = enemy:get_position()
-        local enemy_distance = player_position:dist_to(enemy_position)
+    -- Check if enhanced targeting is enabled and try to use it
+    if menu_module.menu_elements.enhanced_targeting:get() and 
+       menu_module.menu_elements.aoe_optimization:get() then
         
-        if enemy_distance < distance then
-            local nearby_count = 0
-            for _, other in ipairs(enemies) do
-                if enemy_position:dist_to(other:get_position()) <= distance then
-                    nearby_count = nearby_count + 1
+        local best_position = nil
+        local hit_count = 0
+        
+        -- Use enhanced targeting to find optimal position
+        local enemies = utility.get_units_inside_circle_list(player_position, distance * 1.5)
+        if #enemies >= global_min_enemies or boss_present then
+            -- Find optimal position with enhanced targeting
+            local positions = {}
+            local max_enemies = 0
+            
+            -- Grid search for optimal position
+            local search_radius = distance
+            local step_size = 2.0
+            
+            for x = -search_radius, search_radius, step_size do
+                for y = -search_radius, search_radius, step_size do
+                    local test_pos = vec3.new(
+                        player_position:x() + x,
+                        player_position:y() + y,
+                        player_position:z()
+                    )
+                    
+                    -- Count enemies that would be hit
+                    local enemies_hit = 0
+                    for _, enemy in ipairs(enemies) do
+                        local enemy_pos = enemy:get_position()
+                        if test_pos:dist_to(enemy_pos) <= distance then
+                            enemies_hit = enemies_hit + 1
+                        end
+                    end
+                    
+                    if enemies_hit > max_enemies then
+                        max_enemies = enemies_hit
+                        best_position = test_pos
+                        hit_count = enemies_hit
+                    end
                 end
             end
             
-            if nearby_count > most_enemies then
-                most_enemies = nearby_count
-                best_target = enemy
-                best_position = enemy_position
+            if best_position and hit_count >= global_min_enemies then
+                is_currently_channeling = true
+                last_target_position = best_position
+                
+                -- Start channel with better parameters
+                cast_spell.add_channel_spell(
+                    spell_id_dance_of_knives,
+                    0, -- start immediately
+                    15, -- longer duration (15 seconds)
+                    nil, -- no target
+                    best_position,
+                    dance_of_knives_menu_elements_base.animation_delay:get(),
+                    dance_of_knives_menu_elements_base.interval:get()
+                )
+                
+                local current_time = get_time_since_inject()
+                next_time_allowed_cast = current_time
+                console.print(string.format("Rouge Plugin: Channeling Dance of Knives using enhanced targeting with %d enemies", hit_count))
+                return true
             end
         end
-    end
-
-    if best_target and best_position then
-        is_currently_channeling = true
-        last_target_position = best_position
-        
-        -- Start channel with better parameters
-        cast_spell.add_channel_spell(
-            spell_id_dance_of_knives,
-            0, -- start immediately
-            15, -- longer duration (15 seconds)
-            nil, -- no target
-            best_position,
-            dance_of_knives_menu_elements_base.animation_delay:get(),
-            dance_of_knives_menu_elements_base.interval:get()
-        )
-        
-        local current_time = get_time_since_inject()
-        next_time_allowed_cast = current_time
-        console.print("Channeling Dance of Knives at position with " .. most_enemies .. " enemies")
-        return true
     end
 
     return false

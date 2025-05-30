@@ -1,6 +1,8 @@
 local my_utility = require("my_utility/my_utility")
 local menu_module = require("menu")
 local my_target_selector = require("my_utility/my_target_selector")
+local enhanced_targeting = require("my_utility/enhanced_targeting")
+local enhancements_manager = require("my_utility/enhancements_manager")
 
 local menu_elements =
 {
@@ -79,6 +81,11 @@ local function logics(entity_list, target_selector_data, target)
     -- Get player position
     local player_position = get_player_position()
     
+    -- Update spell range info for visualization
+    local spell_radius = menu_elements.spell_radius:get()
+    local spell_range = menu_elements.spell_range:get()
+    enhancements_manager.update_spell_range("poison_trap", spell_range, spell_radius, global_poison_trap_last_cast_position)
+    
     -- Handle keybind mode
     local keybind_used = menu_elements.keybind:get_state();
     local trap_mode = menu_elements.trap_mode:get();
@@ -87,7 +94,6 @@ local function logics(entity_list, target_selector_data, target)
     end
     
     -- Check for minimum enemy count
-    local spell_radius = menu_elements.spell_radius:get()
     local all_units_count, normal_units_count, elite_units_count, champion_units_count, boss_units_count = 
         my_utility.enemy_count_in_range(spell_radius, player_position)
     
@@ -121,8 +127,6 @@ local function logics(entity_list, target_selector_data, target)
     end
     
     -- Find best position to cast
-    local spell_range = menu_elements.spell_range:get()
-    local min_hits_menu = menu_elements.min_hits:get()
     local area_data = my_target_selector.get_most_hits_circular(player_position, spell_range, spell_radius)
     
     -- Check if we have a valid target
@@ -134,7 +138,7 @@ local function logics(entity_list, target_selector_data, target)
     end
     
     -- Validate the area data
-    local is_area_valid = my_target_selector.is_valid_area_spell_aio(area_data, min_hits_menu, entity_list, min_percentage)
+    local is_area_valid = my_target_selector.is_valid_area_spell_aio(area_data, spell_min_hits, entity_list, min_percentage)
     if not is_area_valid and not keybind_can_skip then
         if debug_console then
             console.print("poison_trap: Area not valid")
@@ -183,6 +187,23 @@ local function logics(entity_list, target_selector_data, target)
             console.print("poison_trap: Target too far")
         end
         return false
+    end
+    
+    -- Check if enhanced targeting is enabled and try to use it
+    if menu_module.menu_elements.enhanced_targeting:get() and 
+       menu_module.menu_elements.aoe_optimization:get() then
+        local success, hit_count = enhanced_targeting.optimize_aoe_positioning(
+            poison_trap_id, 
+            spell_radius, 
+            effective_min_enemies
+        )
+        
+        if success then
+            next_time_allowed_cast = current_time + 3.0
+            global_poison_trap_last_cast_time = current_time
+            console.print(string.format("Rouge Plugin: Casted Poison Trap using enhanced targeting, hitting ~%d enemies", hit_count))
+            return true
+        end
     end
     
     -- Cast the spell

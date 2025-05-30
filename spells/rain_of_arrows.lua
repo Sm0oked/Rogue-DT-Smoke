@@ -1,5 +1,8 @@
 local my_utility = require("my_utility/my_utility")
 local menu_module = require("menu")
+-- Add enhanced targeting and enhancements manager
+local enhanced_targeting = require("my_utility/enhanced_targeting")
+local enhancements_manager = require("my_utility/enhancements_manager")
 
 local menu_elements_rain_of_arrows =
 {
@@ -15,6 +18,10 @@ local menu_elements_rain_of_arrows =
     allow_percentage_hits = checkbox:new(true, get_hash(my_utility.plugin_label .. "allow_percentage_hits_rain_base")),
     min_percentage_hits   = slider_float:new(0.1, 1.0, 0.40, get_hash(my_utility.plugin_label .. "min_percentage_hits_rain_base")),
     soft_score            = slider_float:new(2.0, 15.0, 6.0, get_hash(my_utility.plugin_label .. "min_percentage_hits_rain_base_soft_core")),
+    
+    -- Add spell range and radius sliders for better customization
+    spell_radius          = slider_float:new(5.0, 12.0, 7.0, get_hash(my_utility.plugin_label .. "rain_of_arrows_spell_radius")),
+    spell_range           = slider_float:new(5.0, 15.0, 7.0, get_hash(my_utility.plugin_label .. "rain_of_arrows_spell_range")),
 }
 
 local function render_menu()
@@ -34,7 +41,11 @@ local function render_menu()
         if menu_elements_rain_of_arrows.allow_percentage_hits:get() then
             menu_elements_rain_of_arrows.min_percentage_hits:render("Min Percentage Hits", "", 1);
             menu_elements_rain_of_arrows.soft_score:render("Soft Score", "", 1);
-        end       
+        end 
+        
+        -- Add spell range and radius options to menu
+        menu_elements_rain_of_arrows.spell_range:render("Spell Range", "", 1)
+        menu_elements_rain_of_arrows.spell_radius:render("Spell Radius", "", 1)
 
         menu_elements_rain_of_arrows.tree_tab:pop();
     end
@@ -88,18 +99,12 @@ local function logics(entity_list, target_selector_data, best_target)
     ---@type boolean
     local keybind_can_skip = keybind_ignore_hits == true and keybind_used > 0;
     
-    -- Use dynamic values for radius and range if available via menu, otherwise use defaults
-    local actual_spell_radius = default_spell_radius
-    local actual_spell_max_range = default_spell_max_range
+    -- Use menu values for radius and range
+    local actual_spell_radius = menu_elements_rain_of_arrows.spell_radius:get()
+    local actual_spell_max_range = menu_elements_rain_of_arrows.spell_range:get()
     
-    -- Some spells might define these in their menu
-    if menu_elements_rain_of_arrows.spell_radius and menu_elements_rain_of_arrows.spell_radius.get then
-        actual_spell_radius = menu_elements_rain_of_arrows.spell_radius:get()
-    end
-    
-    if menu_elements_rain_of_arrows.spell_range and menu_elements_rain_of_arrows.spell_range.get then
-        actual_spell_max_range = menu_elements_rain_of_arrows.spell_range:get()
-    end
+    -- Update spell range info for visualization
+    enhancements_manager.update_spell_range("rain_of_arrows", actual_spell_max_range, actual_spell_radius)
     
     -- Check for minimum enemy count (global setting)
     local all_units_count, normal_units_count, elite_units_count, champion_units_count, boss_units_count = 
@@ -173,6 +178,24 @@ local function logics(entity_list, target_selector_data, best_target)
     next_time_allowed_cast = current_time + 0.4;
          
     console.print("Rouge Plugin, Casted Rain Of Arrows");
+
+    -- Check if enhanced targeting is enabled and try to use it
+    if menu_module.menu_elements.enhanced_targeting:get() and 
+       menu_module.menu_elements.aoe_optimization:get() then
+        local success, hit_count = enhanced_targeting.optimize_aoe_positioning(
+            rain_of_arrows_spell_id, 
+            actual_spell_radius, 
+            effective_min_enemies
+        )
+        
+        if success then
+            local current_time = get_time_since_inject();
+            next_time_allowed_cast = current_time + 0.4;
+            console.print(string.format("Rouge Plugin: Casted Rain Of Arrows using enhanced targeting, hitting ~%d enemies", hit_count))
+            return true
+        end
+    end
+
     return true;
  
 end

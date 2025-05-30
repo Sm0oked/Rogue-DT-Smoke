@@ -44,27 +44,61 @@ local function logics(target)
     if not is_logic_allowed then
         return false;
     end;
+    
+    -- Validate target
+    if not target then
+        return false
+    end
 
+    -- Get player safely
     local player_local = get_local_player();
-
-    local combo_points = player_local:get_rogue_combo_points()
+    if not player_local then
+        return false
+    end
+    
+    -- Get combo points safely
+    local combo_points = 0
+    pcall(function()
+        combo_points = player_local:get_rogue_combo_points() or 0
+    end)
 
     local min_combo_points = menu_elements_rapid_fire_base.combo_points_slider:get()
     if min_combo_points > 0 and combo_points < min_combo_points then
         return false
     end
     
+    -- Get positions safely
     local player_position = get_player_position();
-    local target_position = target:get_position();
+    if not player_position then
+        return false
+    end
+    
+    local target_position = nil
+    pcall(function()
+        target_position = target:get_position()
+    end)
+    
+    if not target_position then
+        return false
+    end
 
-    local is_collision = prediction.is_wall_collision(player_position, target_position, 0.5)
+    -- Check collision safely
+    local is_collision = false
+    pcall(function()
+        is_collision = prediction.is_wall_collision(player_position, target_position, 0.5)
+    end)
+    
     if is_collision then
         return false
     end
 
-    -- is this an skillshot? idk, its being casted as target spell
-    if cast_spell.target(target, spelL_data_rapid_fire, false) then
-
+    -- Safely cast the spell
+    local cast_success = false
+    pcall(function()
+        cast_success = cast_spell.target(target, spelL_data_rapid_fire, false)
+    end)
+    
+    if cast_success then
         local current_time = get_time_since_inject();
         next_time_allowed_cast = current_time + 1.0;
 

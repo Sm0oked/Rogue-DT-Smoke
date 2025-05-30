@@ -1,5 +1,9 @@
 local my_utility = require("my_utility/my_utility")
 local menu_module = require("menu")
+-- Add enhanced targeting and enhancements manager
+local enhanced_targeting = require("my_utility/enhanced_targeting")
+local enhancements_manager = require("my_utility/enhancements_manager")
+local my_target_selector = require("my_utility/my_target_selector")
 
 local menu_elements =
 {
@@ -52,8 +56,9 @@ local function render_menu()
 end
 
 local spell_id_smoke_grenade = 356162;
-local my_target_selector = require("my_utility/my_target_selector");
 local next_time_allowed_cast = 0.0;
+local global_smoke_grenade_last_cast_position = nil;
+
 local function logics(entity_list, target_selector_data, best_target)
 
     -- local spell_data_smoke_grenade = spell_data:new(
@@ -89,7 +94,7 @@ local function logics(entity_list, target_selector_data, best_target)
     local keybind_ignore_hits = menu_elements.keybind_ignore_hits:get();
   
       ---@type boolean
-        local keybind_can_skip = keybind_ignore_hits == true and keybind_used > 0;
+    local keybind_can_skip = keybind_ignore_hits == true and keybind_used > 0;
     -- console.print("keybind_can_skip " .. tostring(keybind_can_skip))
     -- console.print("keybind_used " .. keybind_used)
     
@@ -207,6 +212,51 @@ local function logics(entity_list, target_selector_data, best_target)
         --     console.print("poison_trap leaving 55555 -> " .. math.sqrt(closest_distance_sqr))
         -- end
         return false;
+    end
+
+    -- Check if enhanced targeting is enabled and try to use it
+    if menu_module.menu_elements.enhanced_targeting:get() and 
+       menu_module.menu_elements.aoe_optimization:get() then
+        
+        -- Apply filter mode to enhanced targeting
+        local filter_passed = true
+        if menu_elements.filter_mode:get() > 0 then
+            -- Check if there are suitable targets based on filter mode
+            local enemies = utility.get_units_inside_circle_list(player_position, spell_range)
+            local has_elite = false
+            local has_boss = false
+            
+            for _, enemy in ipairs(enemies) do
+                if enemy:is_elite() or enemy:is_champion() then
+                    has_elite = true
+                end
+                if enemy:is_boss() then
+                    has_boss = true
+                end
+            end
+            
+            if menu_elements.filter_mode:get() == 1 and not (has_elite or has_boss) then
+                filter_passed = false
+            elseif menu_elements.filter_mode:get() == 2 and not has_boss then
+                filter_passed = false
+            end
+        end
+        
+        if filter_passed then
+            local success, hit_count = enhanced_targeting.optimize_aoe_positioning(
+                spell_id_smoke_grenade, 
+                spell_radius, 
+                effective_min_enemies
+            )
+            
+            if success then
+                local current_time = get_time_since_inject()
+                next_time_allowed_cast = current_time + 0.4
+                global_smoke_grenade_last_cast_position = player_position -- Approximate position
+                console.print(string.format("Rouge Plugin: Casted Smoke Grenade using enhanced targeting, hitting ~%d enemies", hit_count))
+                return true
+            end
+        end
     end
 
     if cast_spell.position(spell_id_smoke_grenade, cast_position, 0.4)then

@@ -40,18 +40,44 @@ local function logics(target)
         return false;
     end;
 
-    -- local player_local = get_local_player();
+    -- Validate target
+    if not target then
+        return false
+    end
     
     local spell_range = 2.250
     local player_position = get_player_position();
-    local target_position = target:get_position();
-    local distance_sqr = target_position:squared_dist_to_ignore_z(player_position)
-    if distance_sqr > (spell_range * spell_range ) then
+    if not player_position then
+        return false
+    end
+    
+    -- Get target position safely
+    local target_position = nil
+    pcall(function()
+        target_position = target:get_position();
+    end)
+    
+    if not target_position then
+        return false
+    end
+    
+    -- Calculate distance safely
+    local distance_sqr = 0
+    pcall(function()
+        distance_sqr = target_position:squared_dist_to_ignore_z(player_position)
+    end)
+    
+    if distance_sqr > (spell_range * spell_range) then
         return false
     end
 
-    if cast_spell.target(target, spell_data_twist_blade, false) then
-
+    -- Safely cast the spell
+    local cast_success = false
+    pcall(function()
+        cast_success = cast_spell.target(target, spell_data_twist_blade, false)
+    end)
+    
+    if cast_success then
         local current_time = get_time_since_inject();
         next_time_allowed_cast = current_time + 0.1;
 

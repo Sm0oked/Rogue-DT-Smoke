@@ -42,7 +42,7 @@
 
 ## Recent Changes
 
-### Latest Updates (Last Updated: 2025-05-27)
+### Latest Updates (Last Updated: 2025-05-30)
 
 1. **Boss Enemy Exception Added:**
    - Added logic to bypass minimum enemy count threshold when a boss is present
@@ -73,6 +73,8 @@
    - Implemented early returns when minimum enemy count isn't met
    - More efficient enemy counting with cached results
    - Better resource management during spell evaluation
+
+### Latest Updates (Last Updated: 2025-05-27)
 
 1. **Advanced Enemy Targeting:**
    - Added weighted targeting system with enemy cluster detection
@@ -109,7 +111,7 @@
    - Graceful handling of API changes
    - Detailed error reporting for easier troubleshooting
 
-### Previous Update (Last Updated: 2023-07-11)
+### Previous Update
 
 1. **Improved Evade Functionality:**
    - Fixed momentum stacking with more robust evade implementation

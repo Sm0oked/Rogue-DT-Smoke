@@ -3,6 +3,7 @@ local my_target_selector = require("my_utility/my_target_selector")
 local spell_data = require("my_utility/spell_data")
 local spell_priority = require("spell_priority")
 local menu = require("menu")
+local enhancements_manager = require("my_utility/enhancements_manager")
 
 local local_player = get_local_player()
 if local_player == nil then
@@ -172,6 +173,9 @@ on_render_menu(function()
         end
         menu.menu_elements.disabled_spells_tree:pop()
     end
+
+    -- Add enhancements menu
+    enhancements_manager.render_enhancements_menu(menu.menu_elements)
 
     menu.menu_elements.main_tree:pop();
 end)
@@ -380,6 +384,9 @@ local function get_momentum_stacks()
     return 0
 end
 
+-- Initialize enhancements
+local enhancements_initialized = false
+
 on_update(function()
     local local_player = get_local_player()
     if not local_player or not menu.menu_elements.main_boolean:get() then
@@ -387,6 +394,55 @@ on_update(function()
     end
 
     local current_time = get_time_since_inject()
+
+    -- Initialize enhancements if not done already
+    if not enhancements_initialized then
+        enhancements_initialized = enhancements_manager.initialize(menu.menu_elements)
+    end
+    
+    -- Process enhanced evade if enabled
+    if menu.menu_elements.enhanced_evade and menu.menu_elements.enhanced_evade:get() then
+        -- Wrap evade processing in pcall to prevent script errors
+        local evaded = false
+        local evade_success = pcall(function()
+            evaded = enhancements_manager.process_evade(menu.menu_elements)
+        end)
+        
+        if evade_success and evaded then
+            -- Successfully evaded, skip the rest of this frame
+            return
+        end
+    end
+    
+    -- Manage buffs if enabled
+    if menu.menu_elements.auto_buff_management and menu.menu_elements.auto_buff_management:get() then
+        -- Wrap buff management in pcall to prevent script errors
+        local buff_managed, buff_action = false, nil
+        local buff_success = pcall(function()
+            buff_managed, buff_action = enhancements_manager.manage_buffs(menu.menu_elements)
+        end)
+        
+        if buff_success and buff_managed then
+            -- Buff management took action, skip the rest of this frame
+            return
+        end
+    end
+    
+    -- Position optimization if enabled and we're not casting
+    if menu.menu_elements.position_optimization and menu.menu_elements.position_optimization:get() and current_time > cast_end_time then
+        -- Wrap position optimization in pcall to prevent script errors
+        local position_result = { should_move = false }
+        local position_success = pcall(function()
+            position_result = enhancements_manager.optimize_position(menu.menu_elements)
+        end)
+        
+        if position_success and position_result and position_result.should_move then
+            -- Temporarily disable orbwalker movement blocking
+            orbwalker.set_block_movement(false)
+            -- Let the script handle movement this frame
+            return
+        end
+    end
 
     -- Check auto-play objective to adapt behavior
     if my_utility.is_auto_play_enabled() then
@@ -842,6 +898,9 @@ on_render(function()
             graphics.circle_3d(closest_cursor_target:get_position(), 1.5, color_red(150), 2.0, 36)
         end
     end
+
+    -- Call enhanced rendering if debug is enabled
+    enhancements_manager.on_render(menu.menu_elements)
 end);
 
 console.print("Rogue Death Trap Smoke Enhanced | Pit Push Rotation | Version 1")

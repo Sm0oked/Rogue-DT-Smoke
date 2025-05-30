@@ -1,5 +1,9 @@
 local my_utility = require("my_utility/my_utility")
 local menu_module = require("menu")
+-- Add enhanced targeting and enhancements manager
+local enhanced_targeting = require("my_utility/enhanced_targeting")
+local enhancements_manager = require("my_utility/enhancements_manager")
+local my_target_selector = require("my_utility/my_target_selector");
 
 local menu_elements =
 {
@@ -47,7 +51,6 @@ local function render_menu()
 end
 
 local spell_id_penetration_shot = 377137;
-local my_target_selector = require("my_utility/my_target_selector");
 local spell_data_penetration_shot = spell_data:new(
     1.50,                        -- radius
     20.0,                        -- range
@@ -59,6 +62,8 @@ local spell_data_penetration_shot = spell_data:new(
     targeting_type.skillshot    --targeting_type
 )
 local next_time_allowed_cast = 0.0;
+local global_penetration_shot_last_cast_position = nil;
+
 local function logics(entity_list, target_selector_data, best_target)
     
     local menu_boolean = menu_elements.main_boolean:get();
@@ -85,8 +90,14 @@ local function logics(entity_list, target_selector_data, best_target)
     ---@type boolean
     local keybind_can_skip = keybind_ignore_hits == true and keybind_used > 0;
     
-    -- Check for minimum enemy count (global setting)
+    -- Get spell parameters
     local spell_radius = menu_elements.spell_radius:get()
+    local spell_range = menu_elements.spell_range:get()
+    
+    -- Update spell range info for visualization
+    enhancements_manager.update_spell_range("penetrating_shot", spell_range, spell_radius, global_penetration_shot_last_cast_position)
+    
+    -- Check for minimum enemy count (global setting)
     local all_units_count, normal_units_count, elite_units_count, champion_units_count, boss_units_count = 
         my_utility.enemy_count_in_range(spell_radius, player_position)
     
@@ -111,8 +122,6 @@ local function logics(entity_list, target_selector_data, best_target)
         min_percentage = 0.0;
     end
 
-    local spell_range = menu_elements.spell_range:get()
-    -- We already got spell_radius above for the enemy count check
     local min_hits_menu = menu_elements.min_hits:get();
 
     local area_data = my_target_selector.get_most_hits_rectangle(player_position, spell_range, spell_radius)
@@ -152,12 +161,133 @@ local function logics(entity_list, target_selector_data, best_target)
         return false
     end
 
-    if cast_spell.position(spell_id_penetration_shot, cast_position, 0.4)then
-        local current_time = get_time_since_inject();
-        next_time_allowed_cast = current_time + 0.4;
+    -- Check if enhanced targeting is enabled and try to use it
+    if menu_module and menu_module.menu_elements and 
+       menu_module.menu_elements.enhanced_targeting and 
+       menu_module.menu_elements.enhanced_targeting:get() and 
+       menu_module.menu_elements.aoe_optimization and
+       menu_module.menu_elements.aoe_optimization:get() then
+       
+        -- For penetrating shot, we need a special case since it's a linear skill shot
+        local enemies = {}
+        pcall(function()
+            enemies = utility.get_units_inside_circle_list(player_position, spell_range) or {}
+        end)
+        
+        local best_pos = nil
+        local max_hits = 0
+        
+        -- Function to count enemies hit by a line
+        local function count_enemies_in_line(pos, radius)
+            -- Check for null values first
+            if not pos then return 0 end
             
-        console.print("Rouge Plugin, Casted pen shot");
-        return true;
+            local count = 0
+            local direction = nil
+            
+            -- Safely calculate direction with pcall
+            local dir_success = pcall(function()
+                direction = pos:subtract(player_position)
+                if direction and direction:length_3d() > 0 then
+                    direction = direction:normalize()
+                else
+                    error("Invalid direction vector")
+                end
+            end)
+            
+            -- If we couldn't get a valid direction, return 0
+            if not dir_success or not direction then
+                return 0
+            end
+            
+            local max_dist = player_position:dist_to(pos)
+            
+            for _, enemy in ipairs(enemies) do
+                -- Wrap each enemy calculation in pcall
+                pcall(function()
+                    local enemy_pos = enemy:get_position()
+                    if not enemy_pos then return end
+                    
+                    -- Safely project point on line
+                    local proj = nil
+                    pcall(function()
+                        proj = my_utility.project_point_on_line(player_position, direction, enemy_pos)
+                    end)
+                    
+                    if not proj then return end
+                    
+                    -- Check if projection is within line length
+                    local proj_dist = player_position:dist_to(proj)
+                    if proj_dist <= max_dist then
+                        -- Check if enemy is close enough to the line
+                        local dist_to_line = enemy_pos:dist_to(proj)
+                        if dist_to_line <= radius then
+                            count = count + 1
+                        end
+                    end
+                end)
+            end
+            
+            return count
+        end
+        
+        -- Find best direction for penetrating shot
+        if #enemies > 0 then
+            for _, enemy in ipairs(enemies) do
+                pcall(function()
+                    local enemy_pos = enemy:get_position()
+                    if enemy_pos then
+                        local hits = count_enemies_in_line(enemy_pos, spell_radius)
+                        
+                        if hits > max_hits then
+                            max_hits = hits
+                            best_pos = enemy_pos
+                        end
+                    end
+                end)
+            end
+            
+            if best_pos and max_hits >= effective_min_enemies then
+                -- Check for wall collision
+                local is_wall_collision = false
+                pcall(function()
+                    is_wall_collision = prediction.is_wall_collision(player_position, best_pos, 0.15)
+                end)
+                
+                if not is_wall_collision then
+                    local cast_success = false
+                    pcall(function()
+                        cast_success = cast_spell.position(spell_id_penetration_shot, best_pos, 0.4)
+                    end)
+                    
+                    if cast_success then
+                        local current_time = get_time_since_inject()
+                        next_time_allowed_cast = current_time + 0.4
+                        global_penetration_shot_last_cast_position = best_pos
+                        _G.last_penetrating_shot_time = current_time
+                        console.print(string.format("Rouge Plugin: Casted Penetrating Shot using enhanced targeting, hitting ~%d enemies", max_hits))
+                        return true
+                    end
+                end
+            end
+        end
+    end
+
+    if not is_wall_collision then
+        local cast_success = false
+        pcall(function()
+            cast_success = cast_spell.position(spell_id_penetration_shot, cast_position, 0.4)
+        end)
+        
+        if cast_success then
+            local current_time = get_time_since_inject();
+            next_time_allowed_cast = current_time + 0.4;
+            global_penetration_shot_last_cast_position = cast_position;
+            _G.last_penetrating_shot_time = current_time;
+                
+            console.print("Rouge Plugin, Casted pen shot");
+            return true;
+        end
     end
     return false;
 end
