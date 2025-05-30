@@ -41,7 +41,7 @@ local function render_menu()
         if menu_elements_rain_of_arrows.allow_percentage_hits:get() then
             menu_elements_rain_of_arrows.min_percentage_hits:render("Min Percentage Hits", "", 1);
             menu_elements_rain_of_arrows.soft_score:render("Soft Score", "", 1);
-        end 
+        end       
         
         -- Add spell range and radius options to menu
         menu_elements_rain_of_arrows.spell_range:render("Spell Range", "", 1)

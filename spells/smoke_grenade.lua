@@ -94,7 +94,7 @@ local function logics(entity_list, target_selector_data, best_target)
     local keybind_ignore_hits = menu_elements.keybind_ignore_hits:get();
   
       ---@type boolean
-    local keybind_can_skip = keybind_ignore_hits == true and keybind_used > 0;
+        local keybind_can_skip = keybind_ignore_hits == true and keybind_used > 0;
     -- console.print("keybind_can_skip " .. tostring(keybind_can_skip))
     -- console.print("keybind_used " .. keybind_used)
     

@@ -133,7 +133,7 @@ local function logics(target)
     if menu_module.menu_elements.enhanced_targeting:get() and 
        menu_module.menu_elements.aoe_optimization:get() then
         
-        local best_position = nil
+    local best_position = nil
         local hit_count = 0
         
         -- Use enhanced targeting to find optimal position
@@ -161,36 +161,36 @@ local function logics(target)
                         local enemy_pos = enemy:get_position()
                         if test_pos:dist_to(enemy_pos) <= distance then
                             enemies_hit = enemies_hit + 1
-                        end
-                    end
-                    
+                end
+            end
+            
                     if enemies_hit > max_enemies then
                         max_enemies = enemies_hit
                         best_position = test_pos
                         hit_count = enemies_hit
-                    end
-                end
             end
-            
+        end
+    end
+
             if best_position and hit_count >= global_min_enemies then
-                is_currently_channeling = true
-                last_target_position = best_position
-                
-                -- Start channel with better parameters
-                cast_spell.add_channel_spell(
-                    spell_id_dance_of_knives,
-                    0, -- start immediately
-                    15, -- longer duration (15 seconds)
-                    nil, -- no target
-                    best_position,
-                    dance_of_knives_menu_elements_base.animation_delay:get(),
-                    dance_of_knives_menu_elements_base.interval:get()
-                )
-                
-                local current_time = get_time_since_inject()
-                next_time_allowed_cast = current_time
+        is_currently_channeling = true
+        last_target_position = best_position
+        
+        -- Start channel with better parameters
+        cast_spell.add_channel_spell(
+            spell_id_dance_of_knives,
+            0, -- start immediately
+            15, -- longer duration (15 seconds)
+            nil, -- no target
+            best_position,
+            dance_of_knives_menu_elements_base.animation_delay:get(),
+            dance_of_knives_menu_elements_base.interval:get()
+        )
+        
+        local current_time = get_time_since_inject()
+        next_time_allowed_cast = current_time
                 console.print(string.format("Rouge Plugin: Channeling Dance of Knives using enhanced targeting with %d enemies", hit_count))
-                return true
+        return true
             end
         end
     end

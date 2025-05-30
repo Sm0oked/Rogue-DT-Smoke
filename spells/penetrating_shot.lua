@@ -280,13 +280,13 @@ local function logics(entity_list, target_selector_data, best_target)
         end)
         
         if cast_success then
-            local current_time = get_time_since_inject();
-            next_time_allowed_cast = current_time + 0.4;
+        local current_time = get_time_since_inject();
+        next_time_allowed_cast = current_time + 0.4;
             global_penetration_shot_last_cast_position = cast_position;
             _G.last_penetrating_shot_time = current_time;
-                
-            console.print("Rouge Plugin, Casted pen shot");
-            return true;
+            
+        console.print("Rouge Plugin, Casted pen shot");
+        return true;
         end
     end
     return false;

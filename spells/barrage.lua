@@ -74,7 +74,7 @@ local function logics(target)
     
     local player_position = get_player_position();
     local target_position = target:get_position();
-    
+
     -- Check if enhanced targeting is enabled and try to use it
     if menu_module and menu_module.menu_elements and 
        menu_module.menu_elements.enhanced_targeting and 
